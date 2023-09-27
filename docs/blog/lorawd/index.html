@@ -327,7 +327,7 @@ div.csl-indent {
 <p>Inserting back into the definition of weight decay, we get the following concrete update equations for <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span>:</p>
 <p><span class="math display">\[\begin{align*}
     {\color{YellowOrange}{A}} &amp;\leftarrow {\color{YellowOrange}{A}} - \alpha \frac{\partial \color{BrickRed}{L}}{\partial \color{YellowOrange}{A}} - \alpha \lambda (W_{\text{init}} + {\color{YellowOrange}{A}}{\color{PineGreen}{B}}) {\color{PineGreen}{B^T}}\\
-    {\color{YellowOrange}{B}} &amp;\leftarrow {\color{YellowOrange}{A}} - \alpha \frac{\partial \color{BrickRed}{L}}{\partial \color{YellowOrange}{A}} - \alpha \lambda {\color{PineGreen}{A^T}}(W_{\text{init}} + {\color{PineGreen}{A}}{\color{YellowOrange}{B}})
+    {\color{YellowOrange}{B}} &amp;\leftarrow {\color{YellowOrange}{B}} - \alpha \frac{\partial \color{BrickRed}{L}}{\partial \color{YellowOrange}{B}} - \alpha \lambda {\color{PineGreen}{A^T}}(W_{\text{init}} + {\color{PineGreen}{A}}{\color{YellowOrange}{B}})
 \end{align*}\]</span></p>
 <section id="in-code" class="level4">
 <h4 class="anchored" data-anchor-id="in-code">In code</h4>
@@ -401,8 +401,8 @@ div.csl-indent {
 <p><span class="math display">\[{\color{YellowOrange}{w}} \leftarrow {\color{YellowOrange}{w}} - \alpha \left(u + \frac{\lambda}{2} \frac{\partial R}{\partial \color{YellowOrange}{w}} \right)\]</span></p>
 <p>Which means, a version of our corrected (decays to 0) LoRA update that is compatible with AdamW looks like:</p>
 <div class="page-columns page-full"><p><span class="math display">\[\begin{align*}
-    {\color{YellowOrange}{A}} &amp;\leftarrow {\color{YellowOrange}{A}} - \alpha u  - \alpha \lambda (W_{\text{init}} + {\color{YellowOrange}{A}}{\color{PineGreen}{B}}) {\color{PineGreen}{B^T}}\\
-    {\color{YellowOrange}{B}} &amp;\leftarrow {\color{YellowOrange}{A}} - \alpha u - \alpha \lambda {\color{PineGreen}{A^T}}(W_{\text{init}} + {\color{PineGreen}{A}}{\color{YellowOrange}{B}})
+    {\color{YellowOrange}{A}} &amp;\leftarrow {\color{YellowOrange}{A}} - \alpha u_A  - \alpha \lambda (W_{\text{init}} + {\color{YellowOrange}{A}}{\color{PineGreen}{B}}) {\color{PineGreen}{B^T}}\\
+    {\color{YellowOrange}{B}} &amp;\leftarrow {\color{YellowOrange}{B}} - \alpha u_B - \alpha \lambda {\color{PineGreen}{A^T}}(W_{\text{init}} + {\color{PineGreen}{A}}{\color{YellowOrange}{B}})
 \end{align*}\]</span></p><div class="no-row-height column-margin column-container"><span class="">An alternate, equivalent way to look at this is that we use Adam on the NLL loss, and pure SGD on the <span class="math inline">\(R(\theta)\)</span> loss</span></div></div>
 <p>The code snippet above (implementing the decay to 0 LoRA) is actually already compatible with AdamW in Optax. This very nice behavior comes mostly from free because of the fact AdamW in Optax is <em>already</em> a decomposed chain of three operators (<span class="math inline">\(\text{adam}\)</span>, weight decay, and then scaling by the learning rate); Optax’s actual implementation is as follows:</p>
 <div class="cell" data-execution_count="3">
