@@ -1,0 +1,1365 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.450">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="dcterms.date" content="2022-10-10">
+<meta name="description" content="With proper sharding, LLMs can scale far beyond the memory capacity of a single GPU/TPU. We explore the math underpinning this from the ground up, and then implement a fully working implementation with JAX/Flax.">
+
+<title>irhum.github.io - Tensor Parallelism with jax.pjit</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
+
+
+<script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../../">
+<script src="../../site_libs/quarto-html/quarto.js"></script>
+<script src="../../site_libs/quarto-html/popper.min.js"></script>
+<script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../../site_libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 20,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<script data-goatcounter="https://irhum.goatcounter.com/count" async="" src="//gc.zgo.at/count.js"></script>
+
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<meta name="twitter:title" content="irhum.github.io - Tensor Parallelism with jax.pjit">
+<meta name="twitter:description" content="With proper sharding, LLMs can scale far beyond the memory capacity of a single GPU/TPU. We explore the math underpinning this from the ground up, and then implement a fully working implementation with JAX/Flax.">
+<meta name="twitter:image" content="assets/index.png">
+<meta name="twitter:card" content="summary_large_image">
+</head>
+
+<body class="nav-fixed">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg navbar-dark ">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container">
+    <a class="navbar-brand" href="../../index.html">
+    <span class="navbar-title">irhum.github.io</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="../../about.html" rel="" target="">
+ <span class="menu-text">About</span></a>
+  </li>  
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/irhum" rel="" target=""><i class="bi bi-github" role="img">
+</i> 
+ <span class="menu-text"></span></a>
+  </li>  
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://twitter.com/irhumshafkat" rel="" target=""><i class="bi bi-twitter" role="img">
+</i> 
+ <span class="menu-text"></span></a>
+  </li>  
+</ul>
+            <div class="quarto-navbar-tools">
+</div>
+          </div> <!-- /navcollapse -->
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<header id="title-block-header" class="quarto-title-block default page-columns page-full">
+  <div class="quarto-title-banner page-columns page-full">
+    <div class="quarto-title column-body">
+      <h1 class="title">Tensor Parallelism with <code>jax.pjit</code></h1>
+                  <div>
+        <div class="description">
+          With proper sharding, LLMs can scale far beyond the memory capacity of a single GPU/TPU. We explore the math underpinning this from the ground up, and then implement a fully working implementation with JAX/Flax.
+        </div>
+      </div>
+                          <div class="quarto-categories">
+                <div class="quarto-category">JAX</div>
+                <div class="quarto-category">Flax</div>
+                <div class="quarto-category">LLM</div>
+                <div class="quarto-category">Parallelism</div>
+              </div>
+                  </div>
+  </div>
+    
+  
+  <div class="quarto-title-meta">
+
+      
+      <div>
+      <div class="quarto-title-meta-heading">Published</div>
+      <div class="quarto-title-meta-contents">
+        <p class="date">October 10, 2022</p>
+      </div>
+    </div>
+    
+      
+    </div>
+    
+  
+  </header><div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#intro-parallelism" id="toc-intro-parallelism" class="nav-link active" data-scroll-target="#intro-parallelism">Intro: Parallelism</a>
+  <ul>
+  <li><a href="#data-parallelism" id="toc-data-parallelism" class="nav-link" data-scroll-target="#data-parallelism">Data Parallelism</a></li>
+  <li><a href="#tensor-parallelism" id="toc-tensor-parallelism" class="nav-link" data-scroll-target="#tensor-parallelism">Tensor Parallelism</a></li>
+  </ul></li>
+  <li><a href="#partitioning-intuition" id="toc-partitioning-intuition" class="nav-link" data-scroll-target="#partitioning-intuition">Partitioning: Intuition</a>
+  <ul>
+  <li><a href="#intro-dot-products" id="toc-intro-dot-products" class="nav-link" data-scroll-target="#intro-dot-products">Intro: Dot products</a></li>
+  <li><a href="#intro-matrix-multiplies" id="toc-intro-matrix-multiplies" class="nav-link" data-scroll-target="#intro-matrix-multiplies">Intro: Matrix multiplies</a></li>
+  <li><a href="#sharding-a-matrix-multiply" id="toc-sharding-a-matrix-multiply" class="nav-link" data-scroll-target="#sharding-a-matrix-multiply">Sharding: <em>A</em> Matrix Multiply</a>
+  <ul class="collapse">
+  <li><a href="#case-1-inner-axes" id="toc-case-1-inner-axes" class="nav-link" data-scroll-target="#case-1-inner-axes">Case 1: Inner Axes</a>
+  <ul class="collapse">
+  <li><a href="#case-1a-mesh-axes-match" id="toc-case-1a-mesh-axes-match" class="nav-link" data-scroll-target="#case-1a-mesh-axes-match">Case 1A: Mesh-axes match</a></li>
+  <li><a href="#case-1b-mesh-axes-mismatch" id="toc-case-1b-mesh-axes-mismatch" class="nav-link" data-scroll-target="#case-1b-mesh-axes-mismatch">Case 1B: Mesh-axes mismatch</a></li>
+  </ul></li>
+  <li><a href="#case-2-outer-axes" id="toc-case-2-outer-axes" class="nav-link" data-scroll-target="#case-2-outer-axes">Case 2: Outer Axes</a></li>
+  <li><a href="#full-sharding" id="toc-full-sharding" class="nav-link" data-scroll-target="#full-sharding">Full Sharding</a></li>
+  </ul></li>
+  <li><a href="#sharding-gspmd-style" id="toc-sharding-gspmd-style" class="nav-link" data-scroll-target="#sharding-gspmd-style">Sharding: GSPMD-style</a>
+  <ul class="collapse">
+  <li><a href="#what-is-xw" id="toc-what-is-xw" class="nav-link" data-scroll-target="#what-is-xw">What <em>is</em> <span class="math inline">\(XW\)</span>?</a></li>
+  <li><a href="#gspmds-sharding-spec" id="toc-gspmds-sharding-spec" class="nav-link" data-scroll-target="#gspmds-sharding-spec">GSPMD’s sharding spec</a>
+  <ul class="collapse">
+  <li><a href="#embed-rightarrow-hidden" id="toc-embed-rightarrow-hidden" class="nav-link" data-scroll-target="#embed-rightarrow-hidden">Embed <span class="math inline">\(\rightarrow\)</span> Hidden</a></li>
+  <li><a href="#hidden-rightarrow-embed" id="toc-hidden-rightarrow-embed" class="nav-link" data-scroll-target="#hidden-rightarrow-embed">Hidden <span class="math inline">\(\rightarrow\)</span> Embed</a></li>
+  <li><a href="#wrapping-it-up" id="toc-wrapping-it-up" class="nav-link" data-scroll-target="#wrapping-it-up">Wrapping it up</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+  <li><a href="#partitioning-in-jax" id="toc-partitioning-in-jax" class="nav-link" data-scroll-target="#partitioning-in-jax">Partitioning: In JAX</a>
+  <ul>
+  <li><a href="#the-pjit-programming-model" id="toc-the-pjit-programming-model" class="nav-link" data-scroll-target="#the-pjit-programming-model">The <code>pjit</code> programming model</a>
+  <ul class="collapse">
+  <li><a href="#sharding-constraints" id="toc-sharding-constraints" class="nav-link" data-scroll-target="#sharding-constraints">Sharding constraints</a>
+  <ul class="collapse">
+  <li><a href="#a-first-run" id="toc-a-first-run" class="nav-link" data-scroll-target="#a-first-run">A first run</a></li>
+  </ul></li>
+  </ul></li>
+  <li><a href="#applying-constraints-to-a-ffn" id="toc-applying-constraints-to-a-ffn" class="nav-link" data-scroll-target="#applying-constraints-to-a-ffn">Applying constraints to a FFN</a>
+  <ul class="collapse">
+  <li><a href="#sharding-constraints-weights" id="toc-sharding-constraints-weights" class="nav-link" data-scroll-target="#sharding-constraints-weights">Sharding constraints: Weights</a></li>
+  <li><a href="#putting-it-all-together" id="toc-putting-it-all-together" class="nav-link" data-scroll-target="#putting-it-all-together">Putting it all together</a></li>
+  </ul></li>
+  </ul></li>
+  <li><a href="#program-trace" id="toc-program-trace" class="nav-link" data-scroll-target="#program-trace">Program Trace</a></li>
+  <li><a href="#conclusion-beyond-tensor-parallelism" id="toc-conclusion-beyond-tensor-parallelism" class="nav-link" data-scroll-target="#conclusion-beyond-tensor-parallelism">Conclusion: Beyond Tensor Parallelism</a>
+  <ul>
+  <li><a href="#further-reading" id="toc-further-reading" class="nav-link" data-scroll-target="#further-reading">Further Reading</a></li>
+  <li><a href="#acknowledgements" id="toc-acknowledgements" class="nav-link" data-scroll-target="#acknowledgements">Acknowledgements</a></li>
+  </ul></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content quarto-banner-title-block page-columns page-full" id="quarto-document-content">
+
+
+
+
+<p>As of this writing in late-2022, large language models (LLMs) can now easily exceed 10B+ parameters (and the largest at 100B+ parameters). Pure data parallel strategies are no longer viable as the <em>model itself</em> no longer fits on single devices. Fortunately, research and engineering in scaling them have not slowed down; in the JAX <span class="citation" data-cites="jax2018github">(<a href="#ref-jax2018github" role="doc-biblioref">Bradbury et al., 2018</a>)</span> ecosystem in particular we now have <code>pjit</code>, enabling an orthogonal way to parallelize models called tensor parallelism. In this post, we’ll explore the mathematical underpinnings of tensor parallelism, and learn how to implement it for a 15B param language model using <code>pjit</code>.</p>
+<section id="intro-parallelism" class="level2">
+<h2 class="anchored" data-anchor-id="intro-parallelism">Intro: Parallelism</h2>
+<section id="data-parallelism" class="level3">
+<h3 class="anchored" data-anchor-id="data-parallelism">Data Parallelism</h3>
+<p>Until recently, large scale training of deep learning models have primarily used data parallelism:</p>
+<ul>
+<li>Each device stores a full copy of the model, and receives a “shard” of the batch (if the full batch is 8 training examples, split along 2 devices each device receives 4 examples).</li>
+<li>Each device independently computes the loss, and its gradient (w.r.t. the parameters) using its data shard.</li>
+<li>Only <em>once</em> during each step, they synchronize their gradients and update their own copy of the model.</li>
+</ul>
+<p>As long as a full copy of the model<a href="#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a> fits on device, this general strategy can scale gracefully to the typical maximum of 8 GPUs on a single host, and was the likely strategy used to train the “big” (213 million params) Transformer with in the original Attention is All You Need <span class="citation" data-cites="Attention">(<a href="#ref-Attention" role="doc-biblioref">Vaswani et al., 2017, p. 7</a>)</span> paper <a href="#fn2" class="footnote-ref" id="fnref2" role="doc-noteref"><sup>2</sup></a>. Properly optimized, data parallelism scales to even hundreds of GPUs on multiple hosts.</p>
+<p>However, data parallelism isn’t enough when the model itself can no longer fit on a single device. This is where model parallelism comes in.</p>
+</section>
+<section id="tensor-parallelism" class="level3">
+<h3 class="anchored" data-anchor-id="tensor-parallelism">Tensor Parallelism</h3>
+<p>Model parallelism is when we split the model itself across multiple devices. Tensor Parallelism (“sharding”) is one of two ways to do this; the other is Pipeline Parallelism (“pipelining”). The latter is briefly discussed at the end, but the focus here really is on the former.</p>
+<p>Tensor parallelism is the answer to this question: <em>what if</em> we could compute the activations of <em>every</em> layer of our model, <em>distributed</em> across all our devices?</p>
+<p>Suppose we have 4 devices: with standard data parallelism we make each device compute <em>all</em> the embedding dimensions for 1/4th of the batch:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/data.svg" class="img-fluid figure-img" style="width:50.0%"></p>
+</figure>
+</div>
+<p>But perhaps we could make each device compute 1/4th the embedding dimensions for the entire batch, like this:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/embed.svg" class="img-fluid figure-img" style="width:50.0%"></p>
+</figure>
+</div>
+<p>Even more: instead of sharding on one axis, we could shard both axes. What if we arranged these 4 devices in a <span class="math inline">\(2\times2\)</span> mesh, such that the first (top left) device computed 1/2 the embedding dimensions for 1/2 the batch?</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/dataembed.svg" class="img-fluid figure-img" style="width:25.0%"></p>
+</figure>
+</div>
+<p>This is the big idea behind tensor parallelism: arranging our devices into a 2D mesh, and then sharding <em>both</em> our weights and activations on <em>both</em> axes, for all the layers. That is, <strong>each</strong> device holds a single “shard” of <strong>every</strong> layer in the model. When done properly, it is possible to run calculations with only <em>one</em> full copy of the model distributed across all the devices.</p>
+<p>We’ll start ground up: at the level of the dot products themselves, and see how sharding allows us to do very large matrix multiplies, by trading off increased communication for reduced memory use. Then, we’ll scale it up to a full model in JAX, implementing sharding with <code>pjit</code> on a 15B language model for inference, with focus on the exact code changes, keeping them minimal.</p>
+</section>
+</section>
+<section id="partitioning-intuition" class="level1 page-columns page-full">
+<h1>Partitioning: Intuition</h1>
+<section id="intro-dot-products" class="level2">
+<h2 class="anchored" data-anchor-id="intro-dot-products">Intro: Dot products</h2>
+<p>Let’s start with an observation: any dot product between two vectors can be broken down into the sum of multiple smaller dot products. Suppose:</p>
+<p><span class="math display">\[
+a = \begin{bmatrix}
+1 \\
+0 \\
+2 \\
+-1
+\end{bmatrix}, b = \begin{bmatrix}
+-1 \\
+2 \\
+0 \\
+2
+\end{bmatrix}
+\]</span></p>
+<p>Then, the dot product of these two vectors of length 4 is <span class="math display">\[a \cdot b = (1 \times -1) + (0 \times 2) + (2 \times 0) + (-1 \times 2) = -3\]</span></p>
+<p>But we could easily re-write that expanded calculation as <span class="math display">\[\textcolor{BurntOrange}{\underbrace{[(1 \times -1) + (0 \times 2)]}_\text{-1}} + \textcolor{Plum}{\underbrace{[(2 \times 0) + (-1 \times 2)]}_\text{-2}}\]</span></p>
+<p>Each of these two terms individually is also a dot product of two vectors of length 2. Recoloring the original vectors, we can imagine them as composed of two “partitioned”-vectors:</p>
+<p><span class="math display">\[
+a = \begin{bmatrix}
+\textcolor{BurntOrange}{1} \\
+\textcolor{BurntOrange}{0} \\
+\textcolor{Plum}{2} \\
+\textcolor{Plum}{-1}
+\end{bmatrix} \;\; b = \begin{bmatrix}
+\textcolor{BurntOrange}{-1} \\
+\textcolor{BurntOrange}{2} \\
+\textcolor{Plum}{0} \\
+\textcolor{Plum}{2}
+\end{bmatrix}
+\]</span></p>
+<p>Now, say I wanted my friend to help out with this tedious calculation. If I calculated the dot product with the first partition of each vector (getting back <span class="math inline">\(\textcolor{BurntOrange}{-1}\)</span>), they’d only need to return the <em>result</em> (<span class="math inline">\(\textcolor{Plum}{-2}\)</span>) of their partition (and not their entire sub-vectors) for me to calculate the full dot product, <span class="math inline">\((-1)+(-2)=-3\)</span>.</p>
+</section>
+<section id="intro-matrix-multiplies" class="level2">
+<h2 class="anchored" data-anchor-id="intro-matrix-multiplies">Intro: Matrix multiplies</h2>
+<p>Let’s build on this with another observation: In a matrix multiply <span class="math inline">\(AB=C\)</span>, <span class="math inline">\(C\)</span> is simply a storage mechanism for the pairwise dot-products of all the (row) vectors of <span class="math inline">\(A\)</span> and (column) vectors of <span class="math inline">\(B\)</span><a href="#fn3" class="footnote-ref" id="fnref3" role="doc-noteref"><sup>3</sup></a>. Specifically, let:</p>
+<p><span class="math display">\[A = \begin{bmatrix}
+\textcolor{LimeGreen}{1} &amp; \textcolor{LimeGreen}{0} &amp; \textcolor{LimeGreen}{2} &amp; \textcolor{LimeGreen}{-1} \\
+2 &amp; 1 &amp; 0 &amp; -2
+\end{bmatrix} \;\; B = \begin{bmatrix}
+0 &amp; \textcolor{LimeGreen}{-1} \\
+1 &amp; \textcolor{LimeGreen}{2} \\
+2 &amp; \textcolor{LimeGreen}{0} \\
+0 &amp; \textcolor{LimeGreen}{2}
+\end{bmatrix}\;\; AB = C = \begin{bmatrix}
+4 &amp; \textcolor{LimeGreen}{-3} \\
+1 &amp; -4
+\end{bmatrix}
+\]</span></p>
+<p><span class="math inline">\(A\)</span>’s first row vector and <span class="math inline">\(B\)</span>’s second column vector should seem familiar: we <em>just</em> took their dot products. And as expected, the element of the <em>first row, second column</em> of <span class="math inline">\(C\)</span> is that dot product <span class="math inline">\(-3\)</span>. This perspective also neatly explains two facts about matrix multiplication:</p>
+<ul>
+<li>Why <span class="math inline">\(C\)</span> is a <span class="math inline">\(2 \times 2\)</span> matrix: <span class="math inline">\(A\)</span> has two row vectors, and <span class="math inline">\(B\)</span> has two column vectors, resulting in a <span class="math inline">\(2 \times 2\)</span> matrix to capture all the pairwise dot products. (Likewise, if <span class="math inline">\(A\)</span> had <span class="math inline">\(3\)</span> row vectors, <span class="math inline">\(C\)</span> would be of shape <span class="math inline">\(3 \times 2\)</span>).</li>
+<li>Why the “inner axes” (<span class="math inline">\(A\)</span> being <span class="math inline">\(2 \times \textcolor{LimeGreen}{4}\)</span>, <span class="math inline">\(B\)</span> being <span class="math inline">\(\textcolor{LimeGreen}{4} \times 2\)</span>) have to match: we can’t take dot products of vectors of different lengths. Take note of this “inner axes” terminology, we’re about to build on this right now!</li>
+</ul>
+<p>Both combined, we have the general rule for the shapes: <span class="math inline">\(\underbrace{A}_{n\times d} \underbrace{B}_{d\times m} = \underbrace{C}_{n\times m}\)</span></p>
+</section>
+<section id="sharding-a-matrix-multiply" class="level2 page-columns page-full">
+<h2 class="anchored" data-anchor-id="sharding-a-matrix-multiply">Sharding: <em>A</em> Matrix Multiply</h2>
+<p>The <em>vast</em> majority of compute time in deep neural networks is spent on the matrix multiplies (matmuls) between data (activation) matrices and weight matrices. We focus on a single matmul in this section, building up two cases (1A, 1B and 2), that together can explain <em>every</em> possible sharding pattern.</p>
+<p>Let’s start:</p>
+<ul>
+<li>Suppose we now have a new <span class="math inline">\(A\)</span> matrix of shape <span class="math inline">\(4 \times 16\)</span>, and a <span class="math inline">\(B\)</span> matrix of shape <span class="math inline">\(16 \times 4\)</span>. That is, each has 4 vectors of length 16 each. We want to compute <span class="math inline">\(C=AB\)</span>, where <span class="math inline">\(C\)</span> will be a <span class="math inline">\(4\times4\)</span> matrix.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/ab.svg" class="img-fluid figure-img" style="width:45.0%"></p>
+</figure>
+</div>
+<ul>
+<li>Also suppose we have 8 GPUs/TPUs, which are much slower at <em>multiplying</em> matrices than adding matrices<a href="#fn4" class="footnote-ref" id="fnref4" role="doc-noteref"><sup>4</sup></a>. We arrange these 8 devices in a <span class="math inline">\(2\times4\)</span> mesh.</li>
+</ul>
+<p>Our goal here is to do as little compute as possible here: in the <strong>final version</strong>, we should split up this large matrix multiply such that we only compute <em>one</em> full copy of <span class="math inline">\(C=AB\)</span> split across all 8 devices.</p>
+<section id="case-1-inner-axes" class="level3 page-columns page-full">
+<h3 class="anchored" data-anchor-id="case-1-inner-axes">Case 1: Inner Axes</h3>
+<p>For now, let’s try a version of the problem that may be easier to reason about: split up <span class="math inline">\(AB\)</span> such that <em>each device</em> has one full copy of <span class="math inline">\(C=AB\)</span>.</p>
+<p>To get started, we can partition both matrices, just as we previously partitioned vectors. Note that unlike vectors, with matrices we have multiple axes we can “slice” on. For now, let’s use this pattern, where each “sub-matrix” is a <span class="math inline">\(4\times 4\)</span> matrix:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/abshard.svg" class="img-fluid figure-img" style="width:45.0%"></p>
+</figure>
+</div>
+<p>Since <span class="math inline">\(A\)</span> is the first matrix (row vectors) and <span class="math inline">\(B\)</span> is the second matrix (column vectors) in the matmul <span class="math inline">\(AB\)</span>, we’re effectively partitioning along the “inner axes”; cutting each vector into multiple sub-vectors, just as in the dot product example. To make this clearer, we might write down this “sharding configuration” in pseudocode as:</p>
+<ul>
+<li><span class="math inline">\(A\)</span>: <code>(full, sharded)</code></li>
+<li><span class="math inline">\(B\)</span>: <code>(sharded, full)</code></li>
+</ul>
+<p>Continuing this reasoning, just as we decomposed the large dot product into the sum of multiple smaller dot products, we can decompose this larger matrix multiply into the sum of smaller matrix multiplies. Specifically, <span class="math inline">\(AB = A_1B_1+A_2B_2+A_3B_3 +A_4B_4= C_1 + C_2 + C_3+C_4\)</span>.</p>
+<p>Each of these terms is the pairwise dot product of a <strong>subset</strong> of <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span>’s vectors’ feature dimensions; <span class="math inline">\(C_1 = A_1B_1\)</span> is the matrix holding the pairwise dot products of the vectors’ first four dimensions, <span class="math inline">\(C_2 = A_2B_2\)</span> is the second four, and so on. Summing the four <span class="math inline">\(C_i\)</span> matrices, we have the pairwise dot products computed along <em>all</em> the vector dimensions.</p>
+<p>This result implies something curious: to multiply a <span class="math inline">\(4 \times 16\)</span> and <span class="math inline">\(16 \times 4\)</span> matrix, we don’t <em>need</em> to do it in one go; we can just do <span class="math inline">\(4 \times 4\)</span> multiplies and add the results. If we did these multiplies on different devices, that’s a neat way of speeding up the multiplication, and that’s the idea at the heart of tensor parallelism. There’s two possible cases here: when the sharding axes “match”, and when they “mismatch”, both of which will appear in the full neural network we’ll examine.</p>
+<section id="case-1a-mesh-axes-match" class="level4 page-columns page-full">
+<h4 class="anchored" data-anchor-id="case-1a-mesh-axes-match">Case 1A: Mesh-axes match</h4>
+<p>Since we have a <span class="math inline">\(2\times4\)</span> device mesh, one way to partition <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span> onto this mesh is the following way:</p>
+<div class="column-body-outset">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/meshmatch.svg" class="img-fluid figure-img" style="width:100.0%"></p>
+</figure>
+</div>
+</div>
+<p>In technical terms, <span class="math inline">\(A\)</span>’s column dimensions and <span class="math inline">\(B\)</span>’s row dimensions are <em>sharded</em> along the <code>Y</code> axis. We could write our sharding config now as:</p>
+<ul>
+<li><span class="math inline">\(A\)</span>: <code>(full, sharded_Y)</code></li>
+<li><span class="math inline">\(B\)</span>: <code>(sharded_Y, full)</code></li>
+</ul>
+<p>This config concisely captures how the matrices are divided across this mesh. For instance, on the four devices where <code>X=0</code> (the top row), we have <u>all</u> of <span class="math inline">\(A\)</span>’s rows (first axis), and the <u>second shard</u> of <span class="math inline">\(A\)</span>’s columns (the second axis; here, the second 4 dimensions). A full copy of <span class="math inline">\(A\)</span> then is <em>distributed</em> across <code>Y=0,1,2,3</code>.</p>
+<p>However, there’s duplication: since we’re <em>not</em> sharding on <code>X</code>, it means there are two full groupings with <code>Y=0,1,2,3</code>, <em>each</em> with a full copy of <span class="math inline">\(A\)</span>. The same reasoning applies to <span class="math inline">\(B\)</span> (as we see in the diagram), but with rows and columns reversed.</p>
+<section id="multiply" class="level5">
+<h5 class="anchored" data-anchor-id="multiply">Multiply</h5>
+<p>Now, each device multiplies the shard of <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span>, to produce part of the multiplied value <span class="math inline">\(C\)</span>. For example, the device at <code>X=0, Y=1</code> on the mesh produces <span class="math inline">\(C_2 = A_2B_2\)</span>.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/meshmatch2.svg" class="img-fluid figure-img" style="width:85.0%"></p>
+</figure>
+</div>
+<p>Note that the duplication over the <code>X</code> axis results in both duplicate memory use <em>and</em> computation: for instance, both <code>X=0, Y=0</code> and <code>X=1, Y=0</code> are performing the same calculation.</p>
+</section>
+<section id="allreduce" class="level5">
+<h5 class="anchored" data-anchor-id="allreduce">AllReduce</h5>
+<p>All these matmuls are only fragments of <span class="math inline">\(C\)</span>: they have the same <em>shape</em> as <span class="math inline">\(C\)</span>, but each only contains pairwise dot products of <em>parts</em> of <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span>’s vectors. To calculate the full <span class="math inline">\(C\)</span>, the devices can <em>“pull”</em> the other necessary values from its neighbors and <em>then add them</em> to its own calculation. These <a href="https://en.wikipedia.org/wiki/Collective_operation">collective ops</a> are well known, and this specific one is called AllReduce<a href="#fn5" class="footnote-ref" id="fnref5" role="doc-noteref"><sup>5</sup></a>. Let’s visualize this from <code>X=0, Y=1</code>’s perspective (but remember, for now and the rest of this post, in actuality collective ops are performed by <strong>all devices</strong> <em>at the same time</em>):</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/meshmatch2_5.svg" class="img-fluid figure-img" style="width:85.0%"></p>
+</figure>
+</div>
+<p>To recap, our starting scenario was one where each device had to perform this <span class="math inline">\((4\times 16) \times (16 \times 4)\)</span> matrix multiply to get a copy of the final result <span class="math inline">\(C\)</span>. With sharding, each device only had to do one <span class="math inline">\((4\times 4) \times (4\times 4)\)</span> matrix multiply, and sum together the partial results from its neighbors.</p>
+<p><strong><em>And here’s the real lesson</em></strong>: this “shard <span class="math inline">\(\rightarrow\)</span> multiply <span class="math inline">\(\rightarrow\)</span> allreduce” strategy scales to far larger matrices! If in the self-attention block of a Transformer we had <span class="math inline">\(Q\)</span> and <span class="math inline">\(K\)</span> matrices of shape <span class="math inline">\(512 \times 4096\)</span> each (<span class="math inline">\(512\)</span> vectors, each of length <span class="math inline">\(4096\)</span>), then getting the “match” between every pair of queries and keys <span class="math inline">\(QK^T\)</span> is a <span class="math inline">\((512 \times 4096) \times\)</span> <span class="math inline">\((4096 \times 512)\)</span> matrix multiply.</p>
+<p>With this strategy, by splitting the inner axes along the mesh <code>Y</code> axis’s 4 devices, each device in the group of 4 only has to do a <span class="math inline">\((512 \times 1024) \times\)</span> <span class="math inline">\((1024 \times 512)\)</span> multiply (that is, pairwise dot products with just 1024 of 4096 dimensions each), which is about 4x faster<a href="#fn6" class="footnote-ref" id="fnref6" role="doc-noteref"><sup>6</sup></a>.</p>
+<p>But we’re still duplicating work along the <code>X</code> axis; we’ll see shortly how with Case 2, this can be this 8x faster, leveraging all 8 devices.</p>
+</section>
+</section>
+<section id="case-1b-mesh-axes-mismatch" class="level4">
+<h4 class="anchored" data-anchor-id="case-1b-mesh-axes-mismatch">Case 1B: Mesh-axes mismatch</h4>
+<p>Let’s try the above problem (each device obtains a full copy of <span class="math inline">\(C\)</span>), with a modified sharding config:</p>
+<ul>
+<li><span class="math inline">\(A\)</span>: <code>(full, sharded_Y)</code></li>
+<li><span class="math inline">\(B\)</span>: <code>(sharded_X, full)</code></li>
+</ul>
+<p>That is, we now shard <span class="math inline">\(B\)</span>’s first axis on <code>X</code>, <em>not</em> <code>Y</code>. Visualized, the mesh now looks like this:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/meshmismatch.svg" class="img-fluid figure-img" style="width:100.0%"></p>
+</figure>
+</div>
+<p>This doesn’t appear to be a very useful mesh: we now have 4 copies of <span class="math inline">\(B\)</span> over the mesh, compared to the previous two. Worse, because the sharding axes mismatch, we can’t actually multiply: <span class="math inline">\(A_1\)</span> is of shape <span class="math inline">\(4\times4\)</span> (since 16 divided on 4 devices), and <span class="math inline">\(B_1\)</span> is of shape <span class="math inline">\(8 \times 4\)</span> (16 divided on 2 devices). That is, their number of inner dimensions don’t match: each device has twice as many dimensions of <span class="math inline">\(B\)</span>’s (column) vectors than they have of <span class="math inline">\(A\)</span>’s (row) vectors.</p>
+<p>This inability to multiply will be true in general: assume we start off with a valid matmul (inner axes match in number of dimensions), we’re dividing this inner axis length by the number of devices on the corresponding mesh axis, and that may not be the same. Here, <span class="math inline">\(A\)</span> does <span class="math inline">\(\frac{16}{4}=4\)</span> due to the four devices on <code>Y</code>, while <span class="math inline">\(B\)</span> does <span class="math inline">\(\frac{16}{2}=8\)</span> due to the two devices on <code>X</code>.</p>
+<p>But this is fine: we can use another collective op called AllGather, to restore the full matrices on each device. Visualizing this on <code>X=0, Y=1</code> (and remembering that in reality all devices are doing this <em>at the same time</em>):</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/meshmismatch2.svg" class="img-fluid figure-img" style="width:100.0%"></p>
+</figure>
+</div>
+<p>Once each device restores a full copy of <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span>, they multiply it as normal to directly get <span class="math inline">\(C\)</span>. Now, this may seem odd: why’d we shard the matrix, only to gather it (then multiply) in full on every single device? (that is, no compute benefit, since <em>every</em> device does the same calculation).</p>
+<p>Because it turns out when we combine Case 1B with Case 2, we can quite cleanly eliminate this duplicate computation. Let’s see how.</p>
+</section>
+</section>
+<section id="case-2-outer-axes" class="level3 page-columns page-full">
+<h3 class="anchored" data-anchor-id="case-2-outer-axes">Case 2: Outer Axes</h3>
+<p>We’ve focused on sharding on the “inner axes” of a matrix multiply so far, but there’s nothing stopping us from sharding the outer axes; if anything, it’s easier! Building on prior examples, let’s try this sharding pattern:</p>
+<ul>
+<li><span class="math inline">\(A\)</span>: <code>(sharded_X, sharded_Y)</code></li>
+<li><span class="math inline">\(B\)</span>: <code>(sharded_X, full)</code></li>
+</ul>
+<p>Visualizing, we have the following:</p>
+<div class="column-body-outset page-columns page-full">
+<div class="quarto-figure quarto-figure-center page-columns page-full">
+<figure class="figure page-columns page-full">
+<p><img src="assets/case21.svg" class="img-fluid figure-img" style="width:100.0%"></p>
+<figcaption class="figure-caption margin-caption">Since there’s a <em>lot</em> of partitions this point on, it’s easier to keep track of them by keeping track of their “colored in” areas than naming them individually.</figcaption>
+</figure>
+</div>
+</div>
+<p>This is still the same as case 1B, with one change: <code>A</code>’s outer axis is now sharded on <code>X</code>. This means that devices with <code>X=0</code> contain shards of the first 2 (of 4) row vectors, whereas devices where <code>X=1</code> contain shards of the second 2 (of 4) vectors. The <em>feature dimensions</em> of these vectors remain sharded over <code>Y</code>.<a href="#fn7" class="footnote-ref" id="fnref7" role="doc-noteref"><sup>7</sup></a> We now only have <em>one</em> full copy of <span class="math inline">\(A\)</span>, fully distributed over the entire <span class="math inline">\(2\times4\)</span> mesh.</p>
+<p>We now proceed as previously with case 1B, allgathering <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span> on their inner axes. Visualizing from the perspective of <code>X=0,Y=1</code>:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/case22.svg" class="img-fluid figure-img" style="width:100.0%"></p>
+</figure>
+</div>
+<p>Now we multiply the <em>first 2</em> (of 4) row vectors of <span class="math inline">\(A\)</span> with the 4 column vectors of <span class="math inline">\(B\)</span>. To store these pairwise dot products, we end up creating a <span class="math inline">\(2\times4\)</span> matrix, that is, the top half of the (final) values of <span class="math inline">\(C\)</span>:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/case23.svg" class="img-fluid figure-img" style="width:50.0%"></p>
+</figure>
+</div>
+<p>Once all 8 devices do their respective allgathers and multiplies, we have:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/case24.svg" class="img-fluid figure-img" style="width:100.0%"></p>
+</figure>
+</div>
+<p>This should feel familiar! If <span class="math inline">\(A\)</span> is a batch of data (what we’d typically call <span class="math inline">\(X\)</span>), with individual training examples as row vectors, then this is just batch parallelism: the two “submeshes” (corresponding to <code>X=0</code> and <code>X=1</code>) are each processing <em>half</em> of this batch, and then store the half of <span class="math inline">\(C\)</span> that corresponds to the shard of <span class="math inline">\(A\)</span> it processed.</p>
+<p>But there’s <em>still</em> duplicate computation going on: all four devices in the submesh (<code>X=0</code> or <code>X=1</code>) are doing the same work!</p>
+</section>
+<section id="full-sharding" class="level3 page-columns page-full">
+<h3 class="anchored" data-anchor-id="full-sharding">Full Sharding</h3>
+<p>What if we also sharded <span class="math inline">\(B\)</span> along its outer axis? That is, we shard both <span class="math inline">\(X\)</span> and <span class="math inline">\(Y\)</span> over <code>X</code> and <code>Y</code>, with the following sharding pattern:</p>
+<ul>
+<li><span class="math inline">\(A\)</span>: <code>(sharded_X, sharded_Y)</code></li>
+<li><span class="math inline">\(B\)</span>: <code>(sharded_X, sharded_Y)</code></li>
+</ul>
+<p>Visualized, we see that we only have one copy of <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span> distributed over the whole mesh:</p>
+<div class="column-body-outset">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/casefull.svg" class="img-fluid figure-img" style="width:100.0%"></p>
+</figure>
+</div>
+</div>
+<p>Since this sharding spec produces a mismatch along the inner axes, using case 1B, we do an all gather. However, this time as we’ve also sharded <em>both</em> the outer axes, <code>X=0,Y=1</code> will only be processing the full pairwise dot products of the first shard (first 2 row vectors) of <span class="math inline">\(A\)</span>, with the second shard (the 2nd column vector) of <span class="math inline">\(B\)</span>.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/casefull2.svg" class="img-fluid figure-img" style="width:100.0%"></p>
+</figure>
+</div>
+<p>And then, a multiply, resulting in a <span class="math inline">\(2 \times 1\)</span> shard of the final output:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/casefull3.svg" class="img-fluid figure-img" style="width:50.0%"></p>
+</figure>
+</div>
+<p>Zooming out, we see all 8 devices have computed a unique part of the output. Even more wonderfully, <span class="math inline">\(C\)</span> has the same sharding pattern as <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span>, <code>(sharded_X, sharded_Y)</code>:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/casefull4.svg" class="img-fluid figure-img" style="width:100.0%"></p>
+</figure>
+</div>
+</section>
+</section>
+<section id="sharding-gspmd-style" class="level2 page-columns page-full">
+<h2 class="anchored" data-anchor-id="sharding-gspmd-style">Sharding: GSPMD-style</h2>
+<div class="page-columns page-full"><p> The GSPMD paper <span class="citation" data-cites="GSPMD">(<a href="#ref-GSPMD" role="doc-biblioref">Xu et al., 2021</a>)</span> introduced an optimal sharding pattern for Transformers, subsequently used to train PaLM <span class="citation" data-cites="PaLM">(<a href="#ref-PaLM" role="doc-biblioref">Chowdhery et al., 2022</a>)</span>. To reinforce our understanding of the two cases above, we’ll now look at the sharding spec for the feedforward network in the Transformer layer. But before that, one final detour:</p><div class="no-row-height column-margin column-container"><span class="">GSPMD is the parallelization system that enables <code>pjit</code>, implemented as an extension to XLA (JAX’s compiler).</span></div></div>
+<section id="what-is-xw" class="level3">
+<h3 class="anchored" data-anchor-id="what-is-xw">What <em>is</em> <span class="math inline">\(XW\)</span>?</h3>
+<p>Deep learning models at their core are straightforward: a number of layers stacked on top of each other. The core building block is the fully connected layer, often written as <span class="math inline">\(\sigma(XW + b)\)</span>. It’s really three operations:</p>
+<ul>
+<li><span class="math inline">\(XW\)</span><a href="#fn8" class="footnote-ref" id="fnref8" role="doc-noteref"><sup>8</sup></a> is a matrix multiply, where <span class="math inline">\(X\)</span> is a matrix of datapoints as row vectors, and <span class="math inline">\(W\)</span> is a weight matrix.</li>
+<li><span class="math inline">\(b\)</span> is a vector of biases we add to <span class="math inline">\(XW\)</span>.</li>
+<li><span class="math inline">\(\sigma\)</span> is a non-linearity of our choice, often <code>ReLU</code> but more recently enhanced variants such as <code>GeLU</code> in Transformer models.</li>
+</ul>
+<p>We know what it <em>means</em> to shard the data <span class="math inline">\(X\)</span> along its outer axis over <code>X</code>: it’s just splitting the batch into yet smaller batches, standard data parallelism. But what does it mean to shard <span class="math inline">\(W\)</span> along its outer axis, over <code>Y</code>? To understand that, let’s dive deeper: what <em>is</em> <span class="math inline">\(XW\)</span>?</p>
+<p>Well, it’s just a storage mechanism for the dot products of <span class="math inline">\(X\)</span>’s row vectors, and <span class="math inline">\(W\)</span>’s column vectors. We can directly reuse the math at the start of this post, replacing <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span> with <span class="math inline">\(X\)</span> and <span class="math inline">\(W\)</span>:</p>
+<p><span class="math display">\[X = \begin{bmatrix}
+\textcolor{LimeGreen}{1} &amp; \textcolor{LimeGreen}{0} &amp; \textcolor{LimeGreen}{2} &amp; \textcolor{LimeGreen}{-1} \\
+2 &amp; 1 &amp; 0 &amp; -2
+\end{bmatrix} \;\; W = \begin{bmatrix}
+0 &amp; \textcolor{LimeGreen}{-1} \\
+1 &amp; \textcolor{LimeGreen}{2} \\
+2 &amp; \textcolor{LimeGreen}{0} \\
+0 &amp; \textcolor{LimeGreen}{2}
+\end{bmatrix}\;\; XW = \begin{bmatrix}
+4 &amp; \textcolor{LimeGreen}{-3} \\
+1 &amp; -4
+\end{bmatrix}
+\]</span></p>
+<p>The first row of the output matrix, stores the dot products of the first row vector of <span class="math inline">\(X\)</span> with <em>all</em> of the column vectors of <span class="math inline">\(W\)</span>. Since the dot product calculates how much two vectors “match” <a href="#fn9" class="footnote-ref" id="fnref9" role="doc-noteref"><sup>9</sup></a>, the <em>new</em> output row vector (of the <span class="math inline">\(XW\)</span>) stores how much the <em>original</em> row vector (of <span class="math inline">\(X\)</span>) matches with each of the <span class="math inline">\(W\)</span> weight vectors. Since we have two weight vectors, the output row vectors have two feature dimensions; if we have 20,000 weight vectors, they’d have 20,000 feature dimensions!</p>
+<p>This output, once passed through a nonlinearity are the <em>new</em> data vectors (the “activations”), which will then be multiplied with the next layer’s weight matrix to produce yet <em>newer</em> activations. This really is what we mean by stacking layers on top of each other: using the feature matching scores of one layer as the data to the next layer.</p>
+<p>Answering the question, to shard <span class="math inline">\(W\)</span>’s outer axis along <code>Y</code> is to ask each device with a given <code>Y</code> value to compute the dot products with a <em>subset</em> of <span class="math inline">\(W\)</span>’s column vectors. We can do this since the dot product of a data vector with a weight vector <em>doesn’t</em> depend on any other weight vectors. This means on a <span class="math inline">\(2\times4\)</span> mesh with <code>Y=0,1,2,3</code>, devices with <code>Y=0</code> can calculate dot products with the first 1/4th of the weight vectors, devices with <code>Y=1</code> the second 1/4th, and so on. This is exactly what we see in the calculation of <span class="math inline">\(C\)</span> in the previous section (again, replace <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span> with <span class="math inline">\(X\)</span> and <span class="math inline">\(W\)</span>)</p>
+</section>
+<section id="gspmds-sharding-spec" class="level3 page-columns page-full">
+<h3 class="anchored" data-anchor-id="gspmds-sharding-spec">GSPMD’s sharding spec</h3>
+<p>To recap, in the original Transformer (and most variants since), “Each layer has two sub-layers. The first is a multi-head self-attention mechanism, and the second is a simple, position-wise fully connected feed-forward network.” <span class="citation" data-cites="Annotated">(<a href="#ref-Annotated" role="doc-biblioref">A. Huang et al., 2022</a>)</span> Let’s look at the GSPMD paper’s proposed sharding spec for the second sub-layer, the feedforward network (FFN):<a href="#fn10" class="footnote-ref" id="fnref10" role="doc-noteref"><sup>10</sup></a></p>
+<div class="quarto-figure quarto-figure-center page-columns page-full">
+<figure class="figure page-columns page-full">
+<p><img src="assets/gspmd1.png" class="img-fluid figure-img" style="width:40.0%"></p>
+<figcaption class="figure-caption margin-caption">Fig. 7 from the GSPMD paper, modified with data <span class="math inline">\(X\)</span> on the left (weight <span class="math inline">\(W_{\text{in}}\)</span> on the right) to emphasize the <span class="math inline">\(XW_{\text{in}}\)</span> matmul</figcaption>
+</figure>
+</div>
+<p>The FFN is made of two fully-connected layers (the <span class="math inline">\(\sigma(XW + b)\)</span> we just discussed). Breaking this down:</p>
+<ul>
+<li>The first multiplies a weight (<span class="math inline">\(W_{\text{in}}\)</span>, sharded as <span class="math inline">\(\textcolor{Maroon}{m_x}\textcolor{Blue}{h_y}\)</span>) to transform the input features (the <em>original</em> embeddings, sharded as <span class="math inline">\(\textcolor{Maroon}{b_x}S\textcolor{Blue}{m_y}\)</span>) into the features of the “hidden layer” (sharded as <span class="math inline">\(\textcolor{Maroon}{b_x}S\textcolor{Blue}{h_y}\)</span>). In most implementations, the hidden layer has 4x the number of features of the input/outputs of the FFN.</li>
+<li>The second multiplies a weight (<span class="math inline">\(W_{\text{out}}\)</span>, sharded as <span class="math inline">\(\textcolor{Blue}{h_y}\textcolor{Maroon}{m_x}\)</span>) to transform the features of the “hidden layer” (sharded as <span class="math inline">\(\textcolor{Maroon}{b_x}S\textcolor{Blue}{h_y}\)</span>) into the output features (the <em>new</em> embeddings, sharded as <span class="math inline">\(\textcolor{Maroon}{b_x}S\textcolor{Blue}{m_y}\)</span>). The <em>number</em> of output features are the same as the input features, but the features <em>themselves</em> are different!</li>
+</ul>
+<p>Let’s zoom in on this, looking at each of these multiplies (the <code>einsum</code>s in the diagram) separately:</p>
+<section id="embed-rightarrow-hidden" class="level4">
+<h4 class="anchored" data-anchor-id="embed-rightarrow-hidden">Embed <span class="math inline">\(\rightarrow\)</span> Hidden</h4>
+<p>To make things concrete, let’s say we have <span class="math inline">\(8\)</span> sequences, each of length <span class="math inline">\(512\)</span>, and an embedding dimension of <span class="math inline">\(5120\)</span>. That is, the shape of <span class="math inline">\(X\)</span> is <span class="math inline">\((B \times S \times M)\)</span><span class="math inline">\(=(8 \times 512 \times 5120)\)</span>. Since we want 4x the number of features for the hidden layer, we’ll need <span class="math inline">\(20480\)</span> weight vectors of length equalling the embedding dimension <span class="math inline">\(5120\)</span>; hence <span class="math inline">\(W_{\text{in}}\)</span> is of shape <span class="math inline">\((M \times H)\)</span><span class="math inline">\(= (5120 \times 20480)\)</span>.</p>
+<p>The sharding spec for the data <span class="math inline">\(X\)</span> and weights <span class="math inline">\(W\)</span>, in the concise form in the diagram are <span class="math inline">\(\textcolor{Maroon}{b_x}S\textcolor{Blue}{m_y}\)</span>, and <span class="math inline">\(\textcolor{Maroon}{m_x}\textcolor{Blue}{h_y}\)</span>. We can rewrite this more verbosely as:</p>
+<ul>
+<li><span class="math inline">\(X\)</span>: <code>(shard_X, full, shard_Y)  # (batch, seq_len, embed)</code></li>
+<li><span class="math inline">\(W\)</span>: <code>(shard_X, shard_Y)  # (embed, hidden)</code></li>
+</ul>
+<p>Note that we <em>don’t</em> shard along the sequence length axis. This means, for instance, device <code>X=0, Y=1</code> has:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/GSPMD0.svg" class="img-fluid figure-img" style="width:30.0%"></p>
+</figure>
+</div>
+<ul>
+<li>the second of four slices (the second <span class="math inline">\(1280\)</span> of <span class="math inline">\(5120\)</span>) along the embedding dimension</li>
+<li>of <em>all</em> the timesteps</li>
+<li>of the first of two slices (the first <span class="math inline">\(4\)</span> of <span class="math inline">\(8\)</span>) along the batch dimension.</li>
+</ul>
+<p>This sharding pattern should look familiar: this is Case 2 (since the outer axes are sharded) combined with Case 1B (since the inner axes are sharded on mismatched mesh axes), again! Visualizing again from the perspective of <code>X=0, Y=1</code>:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/GSPMD2.svg" class="img-fluid figure-img" style="width:100.0%"></p>
+</figure>
+</div>
+<p>As previously in Case 1B, we allgather the first matrix (here, <span class="math inline">\(X\)</span>) along <code>Y</code>, and the second matrix (here, <span class="math inline">\(W_{\text{in}}\)</span>) along <code>X</code>. Once allgathered, both matrices have their inner axes = <span class="math inline">\(M = 5120\)</span> dimensions.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/GSPMD3.svg" class="img-fluid figure-img" style="width:90.0%"></p>
+</figure>
+</div>
+<p>We leave the outer axes sharded: this means we’re only multiplying the embeddings of the first 4 (of 8) sequences in the batch. We’re multiplying <em>all</em> the input dimensions, but only computing the second (of four slices) of the hidden dimensions, that is, dimensions <code>(5120, 10239)</code> of <span class="math inline">\(20480\)</span> dimensions.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/GSPMD4.svg" class="img-fluid figure-img" style="width:60.0%"></p>
+</figure>
+</div>
+<p>All 8 devices then compute a unique shard of the output (corresponding to a different batch slice along <code>X</code>, and hidden dimension slice along <code>Y</code>), successfully avoiding any duplications.</p>
+</section>
+<section id="hidden-rightarrow-embed" class="level4">
+<h4 class="anchored" data-anchor-id="hidden-rightarrow-embed">Hidden <span class="math inline">\(\rightarrow\)</span> Embed</h4>
+<p>So far, it seems like we’ve only been using Case 1B and Case 2. But here, the sharding spec for the data and weight, in the concise form are <span class="math inline">\(\textcolor{Maroon}{b_x}S\textcolor{Blue}{h_y}\)</span> and <span class="math inline">\(\textcolor{Blue}{h_y}\textcolor{Maroon}{m_x}\)</span>. In verbose form:</p>
+<ul>
+<li><span class="math inline">\(X\)</span>: <code>(shard_X, full, shard_Y)  # (batch, seq_len, hidden)</code></li>
+<li><span class="math inline">\(W\)</span>: <code>(shard_Y, shard_X)  # (hidden, embed)</code></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/GSPMDv0.svg" class="img-fluid figure-img" style="width:100.0%"></p>
+</figure>
+</div>
+<p>That is, the inner axes are sharded on the same mesh axis, which is case 1A. This means we can directly multiply on-device (without having to allgather over the inner axes), and then run allreduce to get the final output. There is one problem though: when <em>both</em> matrices are fully sharded over a 2D mesh, and the mesh axes of their <em>inner</em> axes match, the mesh axes of their <em>outer</em> axes also match.</p>
+<p>This means if we multiply the shards directly, we’ll have the opposite problem of duplicate work: incomplete work. Specifically, since both the outer axis of <span class="math inline">\(X\)</span> (batch) and <span class="math inline">\(W_{\text{out}}\)</span> (embed) are sharded on <code>X</code>, for the first batch slice on the <code>X=0</code> submesh we’ll only compute the dot product with the <em>first half</em> of the weight vectors (on <code>X=1</code>, the dot products of the second batch slice with the <em>second half</em> of the weight vectors).</p>
+<p>We don’t have any devices computing the dot products of the first batch slice with the second half of weight vectors (and vice versa)!</p>
+<p>To fix this, we need to allgather either <span class="math inline">\(X\)</span> or <span class="math inline">\(W\)</span> across their <em>outer</em> axis. Generally, we prefer to keep the batch axis sharded, so we allgather along <span class="math inline">\(W\)</span>’s outer axis. This means each device now computes:</p>
+<ul>
+<li>the dot product over 1/4th of the hidden dimensions</li>
+<li>for 1/2 of the batch</li>
+<li>for <em>all</em> of the weight vectors.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/GSPMDv1.svg" class="img-fluid figure-img" style="width:70.0%"></p>
+</figure>
+</div>
+<p>Then multiplying, each device along <code>X=0</code> produces <em>part</em> of the dot products for <em>all</em> the embedding dimensions (case 1A), for the first batch shard (case 2):</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/GSPMDv2.svg" class="img-fluid figure-img" style="width:30.0%"></p>
+</figure>
+</div>
+<p>At this point, we have two options: we can either proceed with an allreduce, as previously covered in case 1A. <em>Or</em>, we can notice what we <em>want</em> is to produce an output tensor with the same sharding pattern as the input to the entire FFN subnetwork. In this case, we can use a different collective op called reduce-scatter. Unlike allreduce, which sums up values across all devices for the entire shard, this sums up values only for the smaller part of the shard we want:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/GSPMDv3.svg" class="img-fluid figure-img" style="width:80.0%"></p>
+</figure>
+</div>
+</section>
+<section id="wrapping-it-up" class="level4">
+<h4 class="anchored" data-anchor-id="wrapping-it-up">Wrapping it up</h4>
+<p>We did it! As we see, Case 2, combined with Case 1A or 1B as appropriate allowed us to stack two fully sharded, fully connected layers on top of each other, <em>and</em> produce an output with the exact same sharding as the input (no resharding needed!).</p>
+<p>We won’t cover the sharding of the self-attention sublayer here, but you should be able to combine the two cases here, with Table 1 in the <a href="https://arxiv.org/abs/2105.04663">GSPMD paper</a> to work out how the attention heads are sharded over the <code>Y</code> axis<a href="#fn11" class="footnote-ref" id="fnref11" role="doc-noteref"><sup>11</sup></a>.</p>
+</section>
+</section>
+</section>
+</section>
+<section id="partitioning-in-jax" class="level1 page-columns page-full">
+<h1>Partitioning: In JAX</h1>
+<p>Now that we have a deep understanding of how to shard a neural network, let’s write some code! We’re in luck here: I’m currently working on a <a href="https://github.com/irhum/esmjax">port</a> of the ESM2 <span class="citation" data-cites="ESM2">(<a href="#ref-ESM2" role="doc-biblioref">Lin et al., 2022</a>)</span> protein language model into Flax <span class="citation" data-cites="flax2020github">(<a href="#ref-flax2020github" role="doc-biblioref">Heek et al., 2020</a>)</span>, so much of the examples will be directly pulled from the working codebase.</p>
+<p>For context: the model built here is a BERT <span class="citation" data-cites="BERT">(<a href="#ref-BERT" role="doc-biblioref">Devlin et al., 2019</a>)</span> style, encoder-only Transformer. It is a 15B param model with 48 layers, and 5120 dimensional embeddings as seen in the <a href="../../blog/pjit/index.html#embed-rightarrow-hidden">previous section</a>. Each encoder layer has two sublayers as previously described: a self-attention sublayer followed by a feedforward network sublayer. Let’s start by understanding <code>pjit</code>’s programming model, then using it to progressively build the full model.</p>
+<section id="the-pjit-programming-model" class="level2 page-columns page-full">
+<h2 class="anchored" data-anchor-id="the-pjit-programming-model">The <code>pjit</code> programming model</h2>
+<p>A good way to think of <code>pjit</code> is a supercharged <code>jax.pmap</code>. If you recall, <code>pmap</code> runs the same program <a href="https://jax.readthedocs.io/en/latest/jax-101/06-parallelism.html">on multiple devices</a>, each with a different shard of <em>input data</em> over the <em>batch</em> axis. <code>pjit</code> is more flexible: it allows us to shard both the data and weights (and when training, even the optimizer states) in whatever configuration we please over a mesh. To do so, <code>pjit</code> requires three things from us:</p>
+<ul>
+<li>A mesh specification, mapping the “logical” devices on the 2D (or higher-D) mesh to the <em>physical</em> devices available.</li>
+<li>The sharding spec of all tensors being passed as <em>input</em> to, and returned as <em>output</em> to from the function.</li>
+<li>Sharding constraints for select intermediate tensors inside the function. This isn’t <em>strictly</em> necessary (XLA GSPMD will try to find a viable layout), but can lead to improved memory usage.</li>
+</ul>
+<p>Note what isn’t here: JAX doesn’t need us to insert any of the collective ops we discussed. It uses a constraint based model, where we specify sharding constraints for the “big”, memory intensive tensors, and it automatically determines the sharding pattern for all other intermediate tensors in the function, as well as any collective ops that need to be inserted to meet these constraints.</p>
+<section id="sharding-constraints" class="level3 page-columns page-full">
+<h3 class="anchored" data-anchor-id="sharding-constraints">Sharding constraints</h3>
+<div class="page-columns page-full"><p>So how do we specify a sharding constraint? Well, we write our function as we normally would, and then call <code>with_sharding_constraint</code> on the tensor we’d like to place the constraint on: </p><div class="no-row-height column-margin column-container"><span class="">Note this is <code>flax</code>’s version of the <a href="https://github.com/google/flax/blob/dd785bae2f3bfe1f880dbfb011b88ba848be288a/flax/linen/partitioning.py#L247">method</a>, which comes with nice add-ons such as checking if we’re inside a <code>pjit</code> and rule translation. <code>jax</code> has a more direct version <a href="https://github.com/google/jax/blob/9cabd227d7d505c393467688024d64d7bf9d5a86/jax/experimental/pjit.py#L1361">here</a>.</span></div></div>
+<div class="cell" data-execution_count="1">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> flax.linen <span class="im">import</span> partitioning <span class="im">as</span> nn_partitioning</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> forward(x):</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="co"># ...run some code here.</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="co"># note x here has shape [batch x seq_len x embed]</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    x <span class="op">=</span> nn_partitioning.with_sharding_constraint(x, (<span class="st">"batch"</span>, <span class="va">None</span>, <span class="st">"embed"</span>))</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="co"># ...continue more code here.</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> x</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>When <em>not</em> inside a <code>pjit</code>, this is a no-op, returning the original input unchanged. Inside a <code>pjit</code>, XLA will insert any collective ops needed to meet the constraints we specified in the second argument.</p>
+<p>The second argument here specifies the mesh axis to shard each of the axes of this rank-3 tensor over. The <code>None</code> in the middle means “do not shard over the sequence length axis”. But note that the other two don’t have <code>X</code> or <code>Y</code>, but “names” (<code>batch</code> and <code>embed</code>). This is because at runtime, we’ll use a set of rules <em>mapping</em> these from names <em>to</em> the mesh axes. For instance, here’s the one I use for the ESM2 models on a <span class="math inline">\(2 \times 4\)</span> mesh:</p>
+<div class="cell" data-execution_count="2">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Create 2D TPU mesh</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>DEFAULT_TPU_RULES <span class="op">=</span> [</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"batch"</span>, <span class="st">"X"</span>),</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"hidden"</span>, <span class="st">"Y"</span>),</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"heads"</span>, <span class="st">"Y"</span>),</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"embed_kernel"</span>, <span class="st">"X"</span>),</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"embed"</span>, <span class="st">"Y"</span>),</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Under these rules, <code>("batch", None, "embed")</code> will become <code>("X", None, "Y")</code>. Writing our code this way keeps it flexible as we potentially try out different sharding configurations.</p>
+<section id="a-first-run" class="level4">
+<h4 class="anchored" data-anchor-id="a-first-run">A first run</h4>
+<p>Then, at runtime there’s three things we need to do:</p>
+<ol type="1">
+<li>Create the <code>mesh</code>: the <code>mesh</code> is the object that translates our abstract, 2D mesh to the actual physical hardware that will be running the computation. This is where we specify, say, which of the 8 physical devices becomes the mesh device <code>X=0,Y=1</code>.</li>
+</ol>
+<div class="cell" data-execution_count="3">
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax.experimental <span class="im">import</span> maps</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>mesh_shape <span class="op">=</span> (<span class="dv">2</span>, <span class="dv">4</span>)</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># We reshape the devices into a 2D mesh, and name the mesh axes.</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>devices <span class="op">=</span> np.asarray(jax.devices()).reshape(<span class="op">*</span>mesh_shape)</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>mesh <span class="op">=</span> maps.Mesh(devices, (<span class="st">"X"</span>, <span class="st">"Y"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<ol start="2" type="1">
+<li><code>pjit</code> the function: This is similar to <code>jax.jit</code>, except we now also need to specify the sharding spec for the input and output.</li>
+</ol>
+<ul>
+<li>The input to this transformer is, say, a <span class="math inline">\(8 \times 512\)</span> matrix of integers, and we shard the first (batch) axis along the mesh <code>X</code> axis.</li>
+<li>The output is <span class="math inline">\(5120\)</span> dimensional vectors, so the output is a matrix of shape <span class="math inline">\(8 \times 512 \times 5120\)</span>. We keep the batch axis sharded over <code>X</code>, and the embedding axis sharded over <code>Y</code>, which we define as <code>P("X", None, "Y")</code>. Note that <code>pjit</code> is lower level than the <code>flax</code> methods, and needs the mesh axes directly inside a <code>PartitionSpec</code>; the translation rules we define above are only used for the constraints <em>inside</em> the <code>nn.Module</code>. You can read more about <code>pjit</code> at the JAX level <a href="https://jax.readthedocs.io/en/latest/jax-101/08-pjit.html">here</a>.</li>
+</ul>
+<div class="cell" data-execution_count="4">
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax.experimental <span class="im">import</span> pjit, PartitionSpec <span class="im">as</span> P</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Create fn for inference.</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>pjit_forward <span class="op">=</span> pjit.pjit(</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    forward,</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    in_axis_resources<span class="op">=</span>P(<span class="st">"X"</span>, <span class="va">None</span>),</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    out_axis_resources<span class="op">=</span>P(<span class="st">"X"</span>, <span class="va">None</span>, <span class="st">"Y"</span>),</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<ol start="3" type="1">
+<li>Call the function: we use two context managers, one to activate the mesh, and the other specifying the translation rules for all the sharding constraints inside the function.</li>
+</ol>
+<div class="cell" data-execution_count="5">
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> maps.Mesh(mesh.devices, mesh.axis_names), nn_partitioning.axis_rules(</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    DEFAULT_TPU_RULES</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>):</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    x <span class="op">=</span> pjit_forward(x)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Let’s now apply these constraints to the weights and activations of the feedforward network.</p>
+</section>
+</section>
+</section>
+<section id="applying-constraints-to-a-ffn" class="level2 page-columns page-full">
+<h2 class="anchored" data-anchor-id="applying-constraints-to-a-ffn">Applying constraints to a FFN</h2>
+<div class="page-columns page-full"><p>In a <a href="../../blog/pjit/index.html#gspmds-sharding-spec">previous section</a>, we looked at the sharding spec the GSPMD paper proposed for the FFN in a transformer layer. To summarize in a table: </p><div class="no-row-height column-margin column-container"><span class="">The full sharding spec for both the FFN and self-attention can be found in <a href="https://arxiv.org/abs/2105.04663">Table 1</a> in the GSPMD paper. PaLM uses this same spec, but over a much larger <span class="math inline">\(256\times12\)</span> mesh per pod. <a href="https://arxiv.org/abs/2204.02311">(Sec. 4)</a></span></div></div>
+<table class="table">
+<colgroup>
+<col style="width: 49%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th><strong>Tensor</strong></th>
+<th><strong>Sharding Spec <code>[shape]</code></strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><span class="math inline">\(\text{activation: embedding}\)</span></td>
+<td><span class="math inline">\(X, \_, Y\)</span> <code>[batch, seq_len, embed]</code></td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(W_{\text{in}}\)</span></td>
+<td><span class="math inline">\(X, Y\)</span> <code>[embed, hidden]</code></td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(\text{activation: hidden}\)</span></td>
+<td><span class="math inline">\(X, \_, Y\)</span><code>[batch, seq_len, hidden]</code></td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(W_{\text{out}}\)</span></td>
+<td><span class="math inline">\(Y, X\)</span> <code>[hidden, embed]</code></td>
+</tr>
+</tbody>
+</table>
+<p>This sharding spec is for any generic, dense Transformer. The code below is the second sublayer (the FFN network) of an encoder layer in the ESM2 model. We apply this sharding spec to the weights on lines 11 and 21, and to the activations on lines 13 and 23:</p>
+<div class="column-body-outset">
+<div class="cell" data-execution_count="6">
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1"></a><span class="co"># ... we apply a layer norm and multi-head attention before this.</span></span>
+<span id="cb6-2"><a href="#cb6-2"></a></span>
+<span id="cb6-3"><a href="#cb6-3"></a><span class="co"># Create second residual block (LayerNorm + MLP)</span></span>
+<span id="cb6-4"><a href="#cb6-4"></a>residual <span class="op">=</span> x</span>
+<span id="cb6-5"><a href="#cb6-5"></a>x <span class="op">=</span> nn.LayerNorm(name<span class="op">=</span><span class="st">"final_layer_norm"</span>, epsilon<span class="op">=</span><span class="fl">1e-5</span>)(x)</span>
+<span id="cb6-6"><a href="#cb6-6"></a></span>
+<span id="cb6-7"><a href="#cb6-7"></a><span class="co"># Create + apply first MLP layer with weight + activation sharding constraints.</span></span>
+<span id="cb6-8"><a href="#cb6-8"></a>x <span class="op">=</span> partitioning.Dense(</span>
+<span id="cb6-9"><a href="#cb6-9"></a>    <span class="va">self</span>.ffn_embed_dim,</span>
+<span id="cb6-10"><a href="#cb6-10"></a>    name<span class="op">=</span><span class="st">"fc1"</span>,</span>
+<span id="cb6-11"><a href="#cb6-11"></a>    shard_axes<span class="op">=</span>{<span class="st">"kernel"</span>: (<span class="st">"embed_kernel"</span>, <span class="st">"hidden"</span>)},</span>
+<span id="cb6-12"><a href="#cb6-12"></a>)(x)</span>
+<span id="cb6-13"><a href="#cb6-13"></a>x <span class="op">=</span> nn_partitioning.with_sharding_constraint(x, (<span class="st">"batch"</span>, <span class="va">None</span>, <span class="st">"hidden"</span>))</span>
+<span id="cb6-14"><a href="#cb6-14"></a><span class="co"># Don't approximate gelu to avoid divergence with original PyTorch.</span></span>
+<span id="cb6-15"><a href="#cb6-15"></a>x <span class="op">=</span> nn.gelu(x, approximate<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb6-16"><a href="#cb6-16"></a></span>
+<span id="cb6-17"><a href="#cb6-17"></a><span class="co"># Create + apply second MLP layer with weight + activation sharding constraints.</span></span>
+<span id="cb6-18"><a href="#cb6-18"></a>x <span class="op">=</span> partitioning.Dense(</span>
+<span id="cb6-19"><a href="#cb6-19"></a>    <span class="va">self</span>.embed_dim,</span>
+<span id="cb6-20"><a href="#cb6-20"></a>    name<span class="op">=</span><span class="st">"fc2"</span>,</span>
+<span id="cb6-21"><a href="#cb6-21"></a>    shard_axes<span class="op">=</span>{<span class="st">"kernel"</span>: (<span class="st">"hidden"</span>, <span class="st">"embed_kernel"</span>)},</span>
+<span id="cb6-22"><a href="#cb6-22"></a>)(x)</span>
+<span id="cb6-23"><a href="#cb6-23"></a>x <span class="op">=</span> nn_partitioning.with_sharding_constraint(x, (<span class="st">"batch"</span>, <span class="va">None</span>, <span class="st">"embed"</span>))</span>
+<span id="cb6-24"><a href="#cb6-24"></a>x <span class="op">=</span> residual <span class="op">+</span> x</span>
+<span id="cb6-25"><a href="#cb6-25"></a></span>
+<span id="cb6-26"><a href="#cb6-26"></a><span class="cf">return</span> x</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</div>
+<p>The activation sharding specs are applied as in the <a href="../../blog/pjit/index.html#sharding-constraints">initial example</a>: we just <code>with_sharding_constraint</code>. But there’s two new things:</p>
+<ul>
+<li>There’s a new <code>shard_axes</code> argument being passed into the layer definition on lines 11 and 21.</li>
+<li>We’re using the <code>partitioning.Dense</code> layer instead of the standard <code>nn.Dense</code>.</li>
+</ul>
+<p>Let me elaborate on what’s going on here.</p>
+<section id="sharding-constraints-weights" class="level3 page-columns page-full">
+<h3 class="anchored" data-anchor-id="sharding-constraints-weights">Sharding constraints: Weights</h3>
+<p>Here’s the goal: we want to apply the same <code>with_sharding_constraint</code> function we used on the activation tensors, to the weight tensors in these <code>Dense</code> layers. Problem is, it’s defined as a local variable <em>inside</em> the <code>__call__</code> method of <a href="https://github.com/google/flax/blob/dd785bae2f3bfe1f880dbfb011b88ba848be288a/flax/linen/linear.py#L186"><code>nn.Dense</code></a>; and is not an attribute I can access from the outside. There’s two options here:</p>
+<ul>
+<li><p>First is the <code>t5x</code> <span class="citation" data-cites="roberts2022t5x">(<a href="#ref-roberts2022t5x" role="doc-biblioref">Roberts et al., 2022</a>)</span> route of creating a new version of <code>Dense</code> directly with the <a href="https://github.com/google/flax/blob/dd785bae2f3bfe1f880dbfb011b88ba848be288a/flax/linen/linear.py#L186">constraint applied inside the <code>__call__</code></a> method. This works in a robust, well-tested library! However, we’d need to make a modified copy of <em>every</em> layer where we want to apply a constraint over a weight.</p></li>
+<li><p>The second approach is noticing that all <code>flax.linen</code> layers use the <code>nn.Module</code>’s (their parent class) <code>.param</code> method to create their params. Then, we can write a simple <a href="https://www.residentmar.io/2019/07/07/python-mixins.html">mix-in class</a> that <em>overrides</em> the default param method to apply the sharding right as it is created:</p></li>
+</ul>
+<div class="column-body-outset">
+<div class="cell" data-execution_count="7">
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1"></a><span class="at">@dataclasses.dataclass</span></span>
+<span id="cb7-2"><a href="#cb7-2"></a><span class="kw">class</span> ShardMixIn:</span>
+<span id="cb7-3"><a href="#cb7-3"></a>    <span class="co">"""Adds parameter sharding constraints for any flax.linen Module.</span></span>
+<span id="cb7-4"><a href="#cb7-4"></a><span class="co">    This is a mix-in class that overrides the `param` method of the</span></span>
+<span id="cb7-5"><a href="#cb7-5"></a><span class="co">    original Module, to selectively add sharding constraints as specified</span></span>
+<span id="cb7-6"><a href="#cb7-6"></a><span class="co">    in `shard_axes`"""</span></span>
+<span id="cb7-7"><a href="#cb7-7"></a></span>
+<span id="cb7-8"><a href="#cb7-8"></a>    shard_axes: Optional[Mapping[<span class="bu">str</span>, Tuple[<span class="bu">str</span>, ...]]] <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb7-9"><a href="#cb7-9"></a></span>
+<span id="cb7-10"><a href="#cb7-10"></a>    <span class="co"># Modifies off </span></span>
+<span id="cb7-11"><a href="#cb7-11"></a>    <span class="co"># https://github.com/google/flax/blob/main/flax/linen/partitioning.py#L304</span></span>
+<span id="cb7-12"><a href="#cb7-12"></a>    <span class="kw">def</span> param(<span class="va">self</span>, name: <span class="bu">str</span>, <span class="op">*</span>init_args):</span>
+<span id="cb7-13"><a href="#cb7-13"></a>        <span class="co"># Initialize using the original Module's `param` method</span></span>
+<span id="cb7-14"><a href="#cb7-14"></a>        param <span class="op">=</span> <span class="bu">super</span>().param(name, <span class="op">*</span>init_args)</span>
+<span id="cb7-15"><a href="#cb7-15"></a></span>
+<span id="cb7-16"><a href="#cb7-16"></a>        <span class="co"># If `shard_axes` specified and param name in the dict, apply constraint</span></span>
+<span id="cb7-17"><a href="#cb7-17"></a>        <span class="cf">if</span> <span class="va">self</span>.shard_axes <span class="kw">and</span> (name <span class="kw">in</span> <span class="va">self</span>.shard_axes.keys()):</span>
+<span id="cb7-18"><a href="#cb7-18"></a>            axes <span class="op">=</span> <span class="va">self</span>.shard_axes[name]</span>
+<span id="cb7-19"><a href="#cb7-19"></a></span>
+<span id="cb7-20"><a href="#cb7-20"></a>            <span class="co"># Apply the sharding constraint (e.g. axes=('embedding', 'hidden'))</span></span>
+<span id="cb7-21"><a href="#cb7-21"></a>            param <span class="op">=</span> nn_partitioning.with_sharding_constraint(param, axes)</span>
+<span id="cb7-22"><a href="#cb7-22"></a></span>
+<span id="cb7-23"><a href="#cb7-23"></a>            <span class="co"># Sow this, to have the AxisMetadata available at initialization.</span></span>
+<span id="cb7-24"><a href="#cb7-24"></a>            <span class="va">self</span>.sow(</span>
+<span id="cb7-25"><a href="#cb7-25"></a>                <span class="st">"params_axes"</span>,</span>
+<span id="cb7-26"><a href="#cb7-26"></a>                <span class="ss">f"</span><span class="sc">{</span>name<span class="sc">}</span><span class="ss">_axes"</span>,</span>
+<span id="cb7-27"><a href="#cb7-27"></a>                nn_partitioning.AxisMetadata(axes),</span>
+<span id="cb7-28"><a href="#cb7-28"></a>                reduce_fn<span class="op">=</span>nn_partitioning._param_with_axes_sow_reduce_fn,</span>
+<span id="cb7-29"><a href="#cb7-29"></a>            )</span>
+<span id="cb7-30"><a href="#cb7-30"></a></span>
+<span id="cb7-31"><a href="#cb7-31"></a>        <span class="cf">return</span> param</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</div>
+<p>There’s only 10 lines of code here, which add the <code>shard_axes</code> argument to <em>any</em> Flax <code>nn.Module</code>. As we can see, <code>with_sharding_constraint</code> is applied on line 21, <em>only</em> when a given param has a constraint specified. No need to rewrite the original layer definition, we simply create a new version that inherits the original, and our mix-in:</p>
+<div class="cell" data-execution_count="8">
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Dense(ShardMixIn, nn.Dense):</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">pass</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>This is just <em>one</em> solution to be able to apply <code>with_sharding_constraint</code> to the weights, and I’m definitely quite open to feedback on whether this is a sensible strategy!</p>
+</section>
+<section id="putting-it-all-together" class="level3">
+<h3 class="anchored" data-anchor-id="putting-it-all-together">Putting it all together</h3>
+<p>We omitted a key detail in the <a href="../../blog/pjit/index.html#sharding-constraints">opening example</a>: in the real forward pass (the <code>.apply</code> method) we need to pass in <em>both</em> <code>esm_sharded_params</code>, and the data <code>batch</code>. Since the params are an input argument, they will also need a sharding spec. The <code>params</code> in Flax are a <code>PyTree</code> (specifically, a nested dict) and so the sharding spec is a nested dict with the same structure. There’s some plumbing here, so let’s go through it step by step:</p>
+<p>Because the <code>ShardMixIn</code> <code>.sow</code>’s the sharding metadata into the module, this metadata is available at model initialization with the <code>.init</code> method. Let’s initialize the 15B model, and inspect the shapes of the parameters of layer 42:</p>
+<div class="cell" data-execution_count="9">
+<details>
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> functools</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> flax.linen <span class="im">as</span> nn</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> esmjax.modules <span class="im">import</span> modules</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> esmjax.modules <span class="im">import</span> partitioning</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>embed_dim <span class="op">=</span> <span class="dv">5120</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>num_heads <span class="op">=</span> <span class="dv">40</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>num_layers <span class="op">=</span> <span class="dv">48</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>embedding <span class="op">=</span> nn.Embed(<span class="dv">33</span>, embed_dim)</span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>block_fn <span class="op">=</span> functools.partial(modules.EncoderLayer, num_heads, embed_dim, embed_dim <span class="op">*</span> <span class="dv">4</span>)</span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>esm2 <span class="op">=</span> modules.ESM2(embedding, block_fn, num_layers)</span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a>key <span class="op">=</span> jax.random.PRNGKey(<span class="dv">0</span>)</span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>arr <span class="op">=</span> jnp.array([[<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">2</span>]])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+<p>We can see that the 5120-dimensional embeddings are projected to produce embeddings for 40 heads, with 128 dims each.</p>
+<div class="cell" data-execution_count="10">
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># jax.eval_shape replaces all actual arrays with ShapeDtypeStruct</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="co"># This avoids memory use, *and* allows us to inspect the param shapes.</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>params <span class="op">=</span> jax.eval_shape(esm2.init, key, arr)</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>params[<span class="st">'params'</span>][<span class="st">'42'</span>][<span class="st">'self_attn'</span>]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="10">
+<pre><code>FrozenDict({
+    k_proj: {
+        bias: ShapeDtypeStruct(shape=(40, 128), dtype=float32),
+        kernel: ShapeDtypeStruct(shape=(5120, 40, 128), dtype=float32),
+    },
+    out_proj: {
+        bias: ShapeDtypeStruct(shape=(5120,), dtype=float32),
+        kernel: ShapeDtypeStruct(shape=(40, 128, 5120), dtype=float32),
+    },
+    q_proj: {
+        bias: ShapeDtypeStruct(shape=(40, 128), dtype=float32),
+        kernel: ShapeDtypeStruct(shape=(5120, 40, 128), dtype=float32),
+    },
+    v_proj: {
+        bias: ShapeDtypeStruct(shape=(40, 128), dtype=float32),
+        kernel: ShapeDtypeStruct(shape=(5120, 40, 128), dtype=float32),
+    },
+})</code></pre>
+</div>
+</div>
+<p>We can also see the axis metadata generated when calling the <code>.init</code> method:</p>
+<div class="cell" data-execution_count="11">
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>params[<span class="st">'params_axes'</span>][<span class="st">'42'</span>][<span class="st">'self_attn'</span>]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="11">
+<pre><code>FrozenDict({
+    k_proj: {
+        kernel_axes: AxisMetadata(names=('embed_kernel', 'heads', None)),
+    },
+    out_proj: {
+        kernel_axes: AxisMetadata(names=('heads', None, 'embed_kernel')),
+    },
+    q_proj: {
+        kernel_axes: AxisMetadata(names=('embed_kernel', 'heads', None)),
+    },
+    v_proj: {
+        kernel_axes: AxisMetadata(names=('embed_kernel', 'heads', None)),
+    },
+})</code></pre>
+</div>
+</div>
+<p>Only the params that we’ve specified a sharding constraint over exist in this <code>PyTree</code>. To pass into <code>pjit</code>, we use a <a href="TODO">utility function</a> to convert the names into mesh axes, and replicate the structure of the full params. The <code>AxisMetadata</code> are replaced with proper <code>PartitionSpec</code>s, and all other params have their sharding pattern set to <code>None</code>, meaning full replication.<a href="#fn12" class="footnote-ref" id="fnref12" role="doc-noteref"><sup>12</sup></a></p>
+<div class="cell" data-execution_count="12">
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>params, params_axes <span class="op">=</span> params.pop(<span class="st">"params_axes"</span>)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>esm_axes <span class="op">=</span> partitioning.get_params_axes(params, </span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>        params_axes, </span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>        rules<span class="op">=</span>partitioning.DEFAULT_TPU_RULES)</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>esm_axes[<span class="st">'params'</span>][<span class="st">'42'</span>][<span class="st">'self_attn'</span>]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="12">
+<pre><code>FrozenDict({
+    k_proj: {
+        bias: None,
+        kernel: PartitionSpec('X', 'Y', None),
+    },
+    out_proj: {
+        bias: None,
+        kernel: PartitionSpec('Y', None, 'X'),
+    },
+    q_proj: {
+        bias: None,
+        kernel: PartitionSpec('X', 'Y', None),
+    },
+    v_proj: {
+        bias: None,
+        kernel: PartitionSpec('X', 'Y', None),
+    },
+})</code></pre>
+</div>
+</div>
+<p>We now pass this sharding spec (<code>esm_axes</code>) into the <code>pjit</code> definition. Then, we have a fully sharded inference method, distributing the computation work of this 15B model across all 8 cores of a TPU. You can find a fully runnable notebook <a href="https://github.com/irhum/esmjax/blob/main/examples/inference_15B.ipynb">here</a>.</p>
+<div class="cell" data-execution_count="13">
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>apply_fn <span class="op">=</span> pjit.pjit(</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>    esm.<span class="bu">apply</span>,</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    in_axis_resources<span class="op">=</span>(esm_axes, P(<span class="st">"X"</span>, <span class="va">None</span>)),</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>    out_axis_resources<span class="op">=</span>P(<span class="st">"X"</span>, <span class="va">None</span>, <span class="st">"Y"</span>),</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> maps.Mesh(mesh.devices, mesh.axis_names), nn_partitioning.axis_rules(</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>    partitioning.DEFAULT_TPU_RULES</span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>):</span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>    embeds <span class="op">=</span> apply_fn(esm_sharded_params, batch)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+</section>
+</section>
+<section id="program-trace" class="level1 page-columns page-full">
+<h1>Program Trace</h1>
+<p>Upto now, we’ve handwaved the fact that there’s a <em>lot</em> of communication going on in this forward pass. How much time on the forward pass are we spending on these collective communication ops? The short answer: on a TPUv2-8, about 20%<a href="#fn13" class="footnote-ref" id="fnref13" role="doc-noteref"><sup>13</sup></a>. The way to answer this is a program trace, and <a href="https://jax.readthedocs.io/en/latest/profiling.html">JAX makes this easy</a>: here’s the full trace of all 48 layers of the ESM2 15B model on TPU3 (of 0 to 7) of a TPUv2-8, taking about 4.25s to complete inference with a batch size of 32:</p>
+<div class="column-body-outset">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/full.png" class="img-fluid figure-img" style="width:100.0%"></p>
+</figure>
+</div>
+</div>
+<p>Let’s zoom in on layer 42. We can tell from this trace that the FFN sublayer (fc1 and fc2) takes more time to execute than the self-attention sublayer. On the top bar we have the <code>XLA Ops</code>, the direct, device-level ops being executed. Most of these are <code>fusion</code> ops, a combination of fused multiplies and elementwise ops (e.g.&nbsp;addition, subtraction):</p>
+<div class="column-body-outset">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/layer.png" class="img-fluid figure-img" style="width:100.0%"></p>
+</figure>
+</div>
+</div>
+<p>Let’s zoom in more into the FFN sublayer. Amusingly, XLA has decided to allgather <code>fc2</code>’s weight matrix (the selected purple box) <em>before</em> the matmuls of <code>fc1</code> and <code>fc2</code>. This is the power of JIT-compilation: XLA is able to re-order operations as needed for better performance. It’s also inserted a reduce-scatter over the results (the rightmost, blue fusion op). Overall, the FFN sublayer takes 54ms, and 8ms are spent on collective communication and data reformatting ops, about ~15%<a href="#fn14" class="footnote-ref" id="fnref14" role="doc-noteref"><sup>14</sup></a>:</p>
+<div class="column-body-outset">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/fc2.png" class="img-fluid figure-img" style="width:100.0%"></p>
+</figure>
+</div>
+</div>
+<p>In summary, for a ~20% performance tradeoff, we can now run inference with only <em>one</em> copy of the model stored across all our devices! I want you to explore this trace yourself, so here’s the link to <a href="https://ui.perfetto.dev/">Perfetto</a>; just hit <code>Open trace file</code> and upload <a href="https://drive.google.com/file/d/1vV5CpgpykyMMsS583-VJRYb7t5ySCLyw/view?usp=sharing">this trace</a>, and go play around!</p>
+</section>
+<section id="conclusion-beyond-tensor-parallelism" class="level1 page-columns page-full">
+<h1>Conclusion: Beyond Tensor Parallelism</h1>
+<p>Tensor parallelism is powerful, allowing us to scale from 1 GPU/TPU to all 8 connected GPU/TPUs, and when using larger slices of a TPU pod, even further (PaLM was trained using just tensor parallelism, on two full TPUv4 pods with 3072 chips each, <a href="https://arxiv.org/abs/2204.02311">Sec. 4</a>). There’s three concluding thoughts I’d like to leave you with:</p>
+<ul>
+<li><p><strong>Pipeline parallelism:</strong> Given the large volume of communication involved, tensor parallelism is only viable when there is fast (ideally 1TB/s+) interconnect between devices. This is true for TPUs all the way up to an entire pod; however, GPUs only have fast interconnect (e.g.&nbsp;<a href="https://en.wikipedia.org/wiki/NVLink">NVLink</a>) in groups of 8 on a single host. <em>Between</em> hosts, the interconnect is slower (e.g.&nbsp;commercial cloud is typically on the order of ~100GB/s <a href="#fn15" class="footnote-ref" id="fnref15" role="doc-noteref"><sup>15</sup></a>), meaning a different strategy is necessary.</p>
+<p>If tensor parallelism is slicing a model “horizontally” (each layer is sharded across all devices), pipeline parallelism is slicing it “vertically” (device 1 can hold layer 0,1 device 2 holds layers 2,3, and so on). The only communication is when activations move <em>between</em> layers, not inside a layer. The problem is that it leads to “bubbles” where devices are inactive <span class="citation" data-cites="GPipe">(<a href="#ref-GPipe" role="doc-biblioref">Y. Huang et al., 2019</a>)</span>. Large GPU clusters tend to use tensor parallelism for all 8 GPUs connected on a single host, and pipeline parallelism between hosts to make the best of both strategies.</p></li>
+</ul>
+<ul>
+<li><p><strong>More automation:</strong> <code>pjit</code> is incredibly flexible, capable of accommodating any sharding pattern we can come up with. The GSPMD paper covers even more “strange” cases such as sharding convolutions over spatial axes, across multiple devices. However, we still do need to specify a sharding pattern, which for non-experts can be challenging. There’s a lot of exciting work going on in frameworks such as Alpa <span class="citation" data-cites="Alpa">(<a href="#ref-Alpa" role="doc-biblioref">Zheng et al., 2022</a>)</span>, which automate this entirely, and I’m excited to see where this line of research is headed.</p></li>
+<li><p><strong>Larger models?</strong> Scaling language models has been a strategy that continues to work with no clear signs of slowing down. But a substantial fraction of scaling up goes into learning <em>factual knowledge</em> about the world  than the semantics of language. Retrieval-augmented models such as RETRO <span class="citation" data-cites="RETRO">(<a href="#ref-RETRO" role="doc-biblioref">Borgeaud et al., 2022</a>)</span> and Atlas <span class="citation" data-cites="Atlas">(<a href="#ref-Atlas" role="doc-biblioref">Izacard et al., 2022</a>)</span> are <em>much</em> smaller (the largest RETRO model is only 7.5B params). However, they introduce a new axis (retrieval time) to the current trio of compute, memory use and intra/inter-host communication, and I’m curious to learn where the bottlenecks will arise as this strategy is scaled up.</p></li>
+</ul>
+<div class="no-row-height column-margin column-container"><span class="">And factual knowledge can go stale: remember, a BERT model trained in 2019 would associate the word Corona more with beer than the pandemic!</span></div><section id="further-reading" class="level3">
+<h3 class="anchored" data-anchor-id="further-reading">Further Reading</h3>
+<p>If you’d like to keep learning more about parallelism at scale, here’s a couple places to help you get started:</p>
+<ul>
+<li><em>How to Train Really Large Models on Many GPUs?</em> <span class="citation" data-cites="weng2021large">(<a href="#ref-weng2021large" role="doc-biblioref">Weng, 2021</a>)</span>: This is a great blog post providing a “big picture” overview of the multiple types of parallelism possible on GPU clusters, as well as other memory saving strategies.</li>
+<li><em>Scalable Training of Language Models using JAX pjit and TPUv4</em> <span class="citation" data-cites="Cohere">(<a href="#ref-Cohere" role="doc-biblioref">Yoo et al., 2022</a>)</span>: A technical report from Cohere detailing how they use <code>pjit</code>, data and tensor parallelism to scale their training on TPUv4 pods (without needing pipeline parallelism)</li>
+<li><em>Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism</em> <span class="citation" data-cites="Megatron">(<a href="#ref-Megatron" role="doc-biblioref">Shoeybi et al., 2019</a>)</span>: This paper explored sharding the data and weights <em>strictly</em> on the outer axes (Case 2 only), motivated by a need to minimize inter-device communication on large GPU clusters.</li>
+<li><em>Efficient Large-Scale Language Model Training on GPU Clusters Using Megatron-LM</em> <span class="citation" data-cites="Megatron2">(<a href="#ref-Megatron2" role="doc-biblioref">Narayanan et al., 2021</a>)</span>: This is a follow-up paper, exploring large scale parallelism on GPU clusters with a fusion of tensor parallelism (Case 2 only) combined with pipeline parallelism.</li>
+<li><em>ZeRO: Memory Optimizations Toward Training Trillion Parameter Models</em> <span class="citation" data-cites="ZeRO">(<a href="#ref-ZeRO" role="doc-biblioref">Rajbhandari et al., 2020</a>)</span>: This paper looked at the technical optimizations needed to store only one copy of a model across all devices (Zero-DP, Stage 3), finding this increases communication volume by only 1.5x over baseline data parallelism.</li>
+<li><em>GSPMD: General and Scalable Parallelization for ML Computation Graphs</em> <span class="citation" data-cites="GSPMD">(<a href="#ref-GSPMD" role="doc-biblioref">Xu et al., 2021</a>)</span>: We used the sharding spec introduced in this paper; the paper as whole discusses extensively about propagating user annotations across a computation graph, and the technical considerations involved.</li>
+</ul>
+</section>
+<section id="acknowledgements" class="level3">
+<h3 class="anchored" data-anchor-id="acknowledgements">Acknowledgements</h3>
+<p>Really grateful to Robert Dumitru for reading an early draft of this, providing honest feedback on the bits that “didn’t quite make sense”, and how they could be clearer. Access to TPUs was generously provided through the <a href="https://sites.research.google/trc/about/">TPU Research Cloud</a>.</p>
+<p><em>Thanks for taking the time to read through this, and I hope you learned something new! Best place to leave feedback would be either my <a href="https://twitter.com/irhumshafkat">Twitter</a>, or this form <a href="https://docs.google.com/forms/d/e/1FAIpQLSfMzcFhYdBJbprpJCMOKt1hd6WBqUnOcD8Y_KhzJ8hLsKLHeQ/viewform?usp=sf_link">here</a>. See you around!</em></p>
+
+
+
+</section>
+</section>
+
+
+<div id="quarto-appendix" class="default"><section class="quarto-appendix-contents" role="doc-bibliography"><h2 class="anchored quarto-appendix-heading">References</h2><div id="refs" class="references csl-bib-body hanging-indent" data-line-spacing="2" role="list">
+<div id="ref-RETRO" class="csl-entry" role="listitem">
+Borgeaud, S., Mensch, A., Hoffmann, J., Cai, T., Rutherford, E., Millican, K., Van Den Driessche, G. B., Lespiau, J.-B., Damoc, B., Clark, A., De Las Casas, D., Guy, A., Menick, J., Ring, R., Hennigan, T., Huang, S., Maggiore, L., Jones, C., Cassirer, A., … Sifre, L. (2022). Improving language models by retrieving from trillions of tokens. In K. Chaudhuri, S. Jegelka, L. Song, C. Szepesvari, G. Niu, &amp; S. Sabato (Eds.), <em>Proceedings of the 39th international conference on machine learning</em> (Vol. 162, pp. 2206–2240). PMLR. <a href="https://proceedings.mlr.press/v162/borgeaud22a.html">https://proceedings.mlr.press/v162/borgeaud22a.html</a>
+</div>
+<div id="ref-jax2018github" class="csl-entry" role="listitem">
+Bradbury, J., Frostig, R., Hawkins, P., Johnson, M. J., Leary, C., Maclaurin, D., Necula, G., Paszke, A., VanderPlas, J., Wanderman-Milne, S., &amp; Zhang, Q. (2018). <em><span>JAX</span>: Composable transformations of <span>P</span>ython+<span>N</span>um<span>P</span>y programs</em> (Version 0.3.13). <a href="http://github.com/google/jax">http://github.com/google/jax</a>
+</div>
+<div id="ref-PaLM" class="csl-entry" role="listitem">
+Chowdhery, A., Narang, S., Devlin, J., Bosma, M., Mishra, G., Roberts, A., Barham, P., Chung, H. W., Sutton, C., Gehrmann, S., Schuh, P., Shi, K., Tsvyashchenko, S., Maynez, J., Rao, A., Barnes, P., Tay, Y., Shazeer, N., Prabhakaran, V., … Fiedel, N. (2022). <em>PaLM: Scaling language modeling with pathways</em>. arXiv. <a href="https://doi.org/10.48550/ARXIV.2204.02311">https://doi.org/10.48550/ARXIV.2204.02311</a>
+</div>
+<div id="ref-BERT" class="csl-entry" role="listitem">
+Devlin, J., Chang, M.-W., Lee, K., &amp; Toutanova, K. (2019). <span>BERT</span>: Pre-training of deep bidirectional transformers for language understanding. <em>Proceedings of the 2019 Conference of the North <span>A</span>merican Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long and Short Papers)</em>, 4171–4186. <a href="https://doi.org/10.18653/v1/N19-1423">https://doi.org/10.18653/v1/N19-1423</a>
+</div>
+<div id="ref-flax2020github" class="csl-entry" role="listitem">
+Heek, J., Levskaya, A., Oliver, A., Ritter, M., Rondepierre, B., Steiner, A., &amp; Zee, M. van. (2020). <em><span>F</span>lax: A neural network library and ecosystem for <span>JAX</span></em> (Version 0.6.0). <a href="http://github.com/google/flax">http://github.com/google/flax</a>
+</div>
+<div id="ref-Annotated" class="csl-entry" role="listitem">
+Huang, A., Subramanian, S., Sum, J., Almubarak, K., &amp; Biderman, S. (2022). <em>The annotated transformer</em>. <a href="http://nlp.seas.harvard.edu/annotated-transformer/#encoder-and-decoder-stacks">http://nlp.seas.harvard.edu/annotated-transformer/#encoder-and-decoder-stacks</a>
+</div>
+<div id="ref-GPipe" class="csl-entry" role="listitem">
+Huang, Y., Cheng, Y., Bapna, A., Firat, O., Chen, D., Chen, M., Lee, H., Ngiam, J., Le, Q. V., Wu, Y., &amp; Chen, zhifeng. (2019). GPipe: Efficient training of giant neural networks using pipeline parallelism. In H. Wallach, H. Larochelle, A. Beygelzimer, F. dAlché-Buc, E. Fox, &amp; R. Garnett (Eds.), <em>Advances in neural information processing systems</em> (Vol. 32). Curran Associates, Inc. <a href="https://proceedings.neurips.cc/paper/2019/file/093f65e080a295f8076b1c5722a46aa2-Paper.pdf">https://proceedings.neurips.cc/paper/2019/file/093f65e080a295f8076b1c5722a46aa2-Paper.pdf</a>
+</div>
+<div id="ref-Atlas" class="csl-entry" role="listitem">
+Izacard, G., Lewis, P., Lomeli, M., Hosseini, L., Petroni, F., Schick, T., Dwivedi-Yu, J., Joulin, A., Riedel, S., &amp; Grave, E. (2022). <em>Few-shot learning with retrieval augmented language models</em>. arXiv. <a href="https://doi.org/10.48550/ARXIV.2208.03299">https://doi.org/10.48550/ARXIV.2208.03299</a>
+</div>
+<div id="ref-ESM2" class="csl-entry" role="listitem">
+Lin, Z., Akin, H., Rao, R., Hie, B., Zhu, Z., Lu, W., Santos Costa, A. dos, Fazel-Zarandi, M., Sercu, T., Candido, S., &amp; Rives, A. (2022). Language models of protein sequences at the scale of evolution enable accurate structure prediction. <em>bioRxiv</em>. <a href="https://doi.org/10.1101/2022.07.20.500902">https://doi.org/10.1101/2022.07.20.500902</a>
+</div>
+<div id="ref-Megatron2" class="csl-entry" role="listitem">
+Narayanan, D., Shoeybi, M., Casper, J., LeGresley, P., Patwary, M., Korthikanti, V. A., Vainbrand, D., Kashinkunti, P., Bernauer, J., Catanzaro, B., Phanishayee, A., &amp; Zaharia, M. (2021). <em>Efficient large-scale language model training on GPU clusters using megatron-LM</em>. arXiv. <a href="https://doi.org/10.48550/ARXIV.2104.04473">https://doi.org/10.48550/ARXIV.2104.04473</a>
+</div>
+<div id="ref-ZeRO" class="csl-entry" role="listitem">
+Rajbhandari, S., Rasley, J., Ruwase, O., &amp; He, Y. (2020). ZeRO: Memory optimizations toward training trillion parameter models. <em>Proceedings of the International Conference for High Performance Computing, Networking, Storage and Analysis</em>.
+</div>
+<div id="ref-roberts2022t5x" class="csl-entry" role="listitem">
+Roberts, A., Chung, H. W., Levskaya, A., Mishra, G., Bradbury, J., Andor, D., Narang, S., Lester, B., Gaffney, C., Mohiuddin, A., Hawthorne, C., Lewkowycz, A., Salcianu, A., Zee, M. van, Austin, J., Goodman, S., Soares, L. B., Hu, H., Tsvyashchenko, S., … Gesmundo, A. (2022). Scaling up models and data with <span class="math inline">\(\texttt{t5x}\)</span> and <span class="math inline">\(\texttt{seqio}\)</span>. <em>arXiv Preprint arXiv:2203.17189</em>. <a href="https://arxiv.org/abs/2203.17189">https://arxiv.org/abs/2203.17189</a>
+</div>
+<div id="ref-Megatron" class="csl-entry" role="listitem">
+Shoeybi, M., Patwary, M., Puri, R., LeGresley, P., Casper, J., &amp; Catanzaro, B. (2019). <em>Megatron-LM: Training multi-billion parameter language models using model parallelism</em>. arXiv. <a href="https://doi.org/10.48550/ARXIV.1909.08053">https://doi.org/10.48550/ARXIV.1909.08053</a>
+</div>
+<div id="ref-Attention" class="csl-entry" role="listitem">
+Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, Ł., &amp; Polosukhin, I. (2017). Attention is all you need. In I. Guyon, U. V. Luxburg, S. Bengio, H. Wallach, R. Fergus, S. Vishwanathan, &amp; R. Garnett (Eds.), <em>Advances in neural information processing systems</em> (Vol. 30). Curran Associates, Inc. <a href="https://proceedings.neurips.cc/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf">https://proceedings.neurips.cc/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf</a>
+</div>
+<div id="ref-weng2021large" class="csl-entry" role="listitem">
+Weng, L. (2021). How to train really large models on many GPUs? <em>Lilianweng.github.io</em>. <a href="https://lilianweng.github.io/posts/2021-09-25-train-large/">https://lilianweng.github.io/posts/2021-09-25-train-large/</a>
+</div>
+<div id="ref-GSPMD" class="csl-entry" role="listitem">
+Xu, Y., Lee, H., Chen, D., Hechtman, B. A., Huang, Y., Joshi, R., Krikun, M., Lepikhin, D., Ly, A., Maggioni, M., Pang, R., Shazeer, N., Wang, S., Wang, T., Wu, Y., &amp; Chen, Z. (2021). <span>GSPMD:</span> General and scalable parallelization for <span>ML</span> computation graphs. <em>CoRR</em>, <em>abs/2105.04663</em>. <a href="https://arxiv.org/abs/2105.04663">https://arxiv.org/abs/2105.04663</a>
+</div>
+<div id="ref-Cohere" class="csl-entry" role="listitem">
+Yoo, J., Perlin, K., Kamalakara, S. R., &amp; Araújo, J. G. M. (2022). <em>Scalable training of language models using JAX pjit and TPUv4</em>. arXiv. <a href="https://doi.org/10.48550/ARXIV.2204.06514">https://doi.org/10.48550/ARXIV.2204.06514</a>
+</div>
+<div id="ref-Alpa" class="csl-entry" role="listitem">
+Zheng, L., Li, Z., Zhang, H., Zhuang, Y., Chen, Z., Huang, Y., Wang, Y., Xu, Y., Zhuo, D., Xing, E. P., Gonzalez, J. E., &amp; Stoica, I. (2022). Alpa: Automating inter- and <span>Intra-Operator</span> parallelism for distributed deep learning. <em>16th USENIX Symposium on Operating Systems Design and Implementation (OSDI 22)</em>, 559–578. <a href="https://www.usenix.org/conference/osdi22/presentation/zheng-lianmin">https://www.usenix.org/conference/osdi22/presentation/zheng-lianmin</a>
+</div>
+</div></section><section id="footnotes" class="footnotes footnotes-end-of-document" role="doc-endnotes"><h2 class="anchored quarto-appendix-heading">Footnotes</h2>
+
+<ol>
+<li id="fn1"><p><em>and</em> a copy of the optimizer state and gradients when we’re training, so potential total memory use of upto 3x the size of the model itself.<a href="#fnref1" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn2"><p>Specifically, in section 5.2 the authors note “We trained our models on one machine with 8 NVIDIA P100 GPUs.”<a href="#fnref2" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn3"><p>Why the <em>row</em> vectors of <span class="math inline">\(A\)</span> and the <em>column</em> vectors of <span class="math inline">\(B\)</span>? Why not just the column vectors of both? This is mostly due to convention, as confusing as it can be for newcomers. I like the Mnemonic RAC-B (“rack b”), rows of A, columns of B.<a href="#fnref3" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn4"><p>For an <span class="math inline">\(N \times N\)</span> matrix, matrix multiplication has time complexity <span class="math inline">\(O(N^3)\)</span> while matrix addition is <span class="math inline">\(O(N^2)\)</span>. For a large enough matrix, the speedup from the parallel matrix multiplies can outweigh the cost of communicating then adding afterwards.<a href="#fnref4" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn5"><p>You may also recognize this as just <code>jax.lax.psum</code>, which it is!<a href="#fnref5" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn6"><p>Of course, <em>not</em> accounting for the communication overhead of the AllReduce. For systems that are compute-bound, splitting the actual multiplication across multiple devices and syncing them together (due to the <span class="math inline">\(O(N^3)\)</span> compute costs of a matrix multiply vs the <span class="math inline">\(O(N^2)\)</span> memory transfer) is still often worth it.<a href="#fnref6" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn7"><p>Again, the <em>outer</em> axes in a matrix multiply are individual vectors; the <em>inner</em> axes are the feature dimensions of those vectors, as we saw in the intro. Feel free to scroll back if you need to recap!<a href="#fnref7" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn8"><p>Note that in math contexts this is often written as <span class="math inline">\(Wx\)</span>, where <span class="math inline">\(x\)</span> is a <em>column</em> vector. In Python, data points are stored as <em>row</em> vectors, which means <span class="math inline">\(X\)</span> <em>has</em> to be on the left hand side (because the feature dimension needs to be the inner dimension, the one we take dot products over!).<a href="#fnref8" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn9"><p>Roughly speaking. The dot product is sensitive to the <em>magnitude</em> of the vectors too, not just their direction. If a particular weight vector is <em>very</em> large, it will have large dot products even if the data vector isn’t that similar. However, with proper regularization, most weight vectors should be within a “reasonable” range, enabling comparison.<a href="#fnref9" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn10"><p>This is specifically the “2D finalized” sharding pattern presented in Table 1.<a href="#fnref10" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn11"><p>Or in the math textbook way, “this is left as an exercise to the reader”. But really, I think working it out would be a neat exercise!<a href="#fnref11" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn12"><p>On a larger model, we’d shard even the biases and layer norms, but on this scale it’s fine not to. They’re a <em>lot</em> smaller than the weights.<a href="#fnref12" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn13"><p>A quick estimate counting <em>both</em> the communication ops (e.g.&nbsp;allgather, fused reduce-scatters) as well as data formatting ops.<a href="#fnref13" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn14"><p>It’s worse in the self-attention sublayer (29%), which also takes less time overall, resulting in an average of 20%. Would be a better layer to focus more for improvement!<a href="#fnref14" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn15"><p>Although, newer offerings such as the <a href="https://aws.amazon.com/ec2/instance-types/p4/">p4d.24xlarge</a> or <a href="https://www.oracle.com/cloud/compute/gpu/nvidia/">BM.GPU4.8</a> have <em>considerably</em> better inter-node bandwidth. At the same time, the A100 GPUs themselves are much faster, which means the inter-node bandwidth must keep up just to <em>avoid</em> becoming a bottleneck.<a href="#fnref15" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+</ol>
+</section></div></main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>

@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.450">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="dcterms.date" content="2023-09-27">
+<meta name="description" content="LoRA doesn’t approximate a solution to full-finetuning; it solves a different (albeit similar) optimization problem">
+
+<title>irhum.github.io - LoRA and Weight Decay</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
+
+
+<script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../../">
+<script src="../../site_libs/quarto-html/quarto.js"></script>
+<script src="../../site_libs/quarto-html/popper.min.js"></script>
+<script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../../site_libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 20,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<script data-goatcounter="https://irhum.goatcounter.com/count" async="" src="//gc.zgo.at/count.js"></script>
+
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<meta name="twitter:title" content="irhum.github.io - LoRA and Weight Decay">
+<meta name="twitter:description" content="LoRA doesn’t approximate a solution to full-finetuning; it solves a different (albeit similar) optimization problem">
+<meta name="twitter:image" content="assets/lorab.svg">
+<meta name="twitter:card" content="summary_large_image">
+</head>
+
+<body class="nav-fixed">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg navbar-dark ">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container">
+    <a class="navbar-brand" href="../../index.html">
+    <span class="navbar-title">irhum.github.io</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="../../about.html" rel="" target="">
+ <span class="menu-text">About</span></a>
+  </li>  
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/irhum" rel="" target=""><i class="bi bi-github" role="img">
+</i> 
+ <span class="menu-text"></span></a>
+  </li>  
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://twitter.com/irhumshafkat" rel="" target=""><i class="bi bi-twitter" role="img">
+</i> 
+ <span class="menu-text"></span></a>
+  </li>  
+</ul>
+            <div class="quarto-navbar-tools">
+</div>
+          </div> <!-- /navcollapse -->
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<header id="title-block-header" class="quarto-title-block default page-columns page-full">
+  <div class="quarto-title-banner page-columns page-full">
+    <div class="quarto-title column-body">
+      <h1 class="title">LoRA and Weight Decay</h1>
+                  <div>
+        <div class="description">
+          LoRA doesn’t approximate a solution to full-finetuning; it solves a different (albeit similar) optimization problem
+        </div>
+      </div>
+                          <div class="quarto-categories">
+                <div class="quarto-category">LLM</div>
+                <div class="quarto-category">LoRA</div>
+              </div>
+                  </div>
+  </div>
+    
+  
+  <div class="quarto-title-meta">
+
+      
+      <div>
+      <div class="quarto-title-meta-heading">Published</div>
+      <div class="quarto-title-meta-contents">
+        <p class="date">September 27, 2023</p>
+      </div>
+    </div>
+    
+      
+    </div>
+    
+  
+  </header><div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#recap-finetuning" id="toc-recap-finetuning" class="nav-link active" data-scroll-target="#recap-finetuning">Recap: Finetuning</a>
+  <ul>
+  <li><a href="#full-finetuning" id="toc-full-finetuning" class="nav-link" data-scroll-target="#full-finetuning">Full Finetuning</a></li>
+  <li><a href="#lora-finetuning" id="toc-lora-finetuning" class="nav-link" data-scroll-target="#lora-finetuning">LoRA finetuning</a></li>
+  </ul></li>
+  <li><a href="#the-interaction" id="toc-the-interaction" class="nav-link" data-scroll-target="#the-interaction">The Interaction</a>
+  <ul>
+  <li><a href="#a-fix" id="toc-a-fix" class="nav-link" data-scroll-target="#a-fix">A fix</a>
+  <ul class="collapse">
+  <li><a href="#in-code" id="toc-in-code" class="nav-link" data-scroll-target="#in-code">In code</a></li>
+  </ul></li>
+  </ul></li>
+  <li><a href="#conclusion" id="toc-conclusion" class="nav-link" data-scroll-target="#conclusion">Conclusion</a></li>
+  <li><a href="#appendix-a-momentum-and-weight-decay" id="toc-appendix-a-momentum-and-weight-decay" class="nav-link" data-scroll-target="#appendix-a-momentum-and-weight-decay">Appendix A: Momentum and Weight Decay</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content quarto-banner-title-block page-columns page-full" id="quarto-document-content">
+
+
+
+
+<p>LoRA <span class="citation" data-cites="hu2021lora">(<a href="#ref-hu2021lora" role="doc-biblioref">Hu et al., 2021</a>)</span> is a now popular alternative to the full finetuning of a Large Language Models (LLMs): instead of tuning the billions of weights of the full model, we add small “adapter” weight matrices that <em>modify</em> the original weight matrices, and tune those instead.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/lorab.svg" class="img-fluid figure-img" style="width:85.0%"></p>
+</figure>
+</div>
+<p>This blogpost dives deeper into a curious behavior: although LoRA is commonly seen an drop-in for full finetuning, its interaction with weight decay means it solves a <em>different</em> optimization problem than full finetuning. Namely, one where the solution weights are regularized towards the frozen base model <span class="math inline">\((W \rightarrow W_{\text{init}})\)</span>, instead of <span class="math inline">\(W \rightarrow 0\)</span> as in full finetuning.</p>
+<p>This means, given increasingly more resources (even equalling that of full finetuning), LoRA does <em>not</em> increasingly better approximate full finetuning, because its objective function is implicitly different to that of full finetuning. This, depending on use case can either be seen as a <strong>bug or a feature</strong>, but is something practitioners should explicitly account for.</p>
+<!-- In short: LoRA’s default optimization setup encourages only the residual added weights to go to zero, not the total weight. This means the weight matrix is regularized to stay “near” the weights of the base (non-finetuned) model, not go to 0, limiting flexibility to change weights when medium/large amounts of data are available. -->
+<section id="recap-finetuning" class="level2">
+<h2 class="anchored" data-anchor-id="recap-finetuning">Recap: Finetuning</h2>
+<p>With LLMs, we typically finetune an initial model (that is “good” on a wide range of text-to-text tasks) to boost performance on a <em>specific</em> task of interest (e.g.&nbsp;generating database queries from natural language). We do this in a two-step process:</p>
+<ul>
+<li>First, creating a finetuning training dataset <span class="math inline">\({(x_i, y_i)_n}\)</span>, which contain pairs of inputs <span class="math inline">\(x\)</span> and targets <span class="math inline">\(y\)</span>.<a href="#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a></li>
+<li>Optimize the weights of the initial model such that our finetuning training dataset <span class="math inline">\({(x_i, y_i)_n}\)</span> becomes more “probable”. The idea here is that a model that is more likely to generate the correct answers <span class="math inline">\(y\)</span> on <span class="math inline">\(x\)</span>’s from our training set, will generalize and also be more likely to generate <span class="math inline">\(y\)</span>’s on <em>new</em> <span class="math inline">\(x\)</span>’s.</li>
+</ul>
+<section id="full-finetuning" class="level3">
+<h3 class="anchored" data-anchor-id="full-finetuning">Full Finetuning</h3>
+<p>Full finetuning means we tune <em>all</em> the weights of the model. For a model such as GPT-3 175B <span class="citation" data-cites="brown2020language">(<a href="#ref-brown2020language" role="doc-biblioref">Brown et al., 2020</a>)</span>, this means giving our optimization algorithm 175 billion numbers it can “dial” up and down as needed to make our finetuning training data more “probable”. Let’s dig a bit deeper, and more concretely define what we mean by weights here.</p>
+<p>Each layer in a Transformer is primarily made of two components: a multihead attention network, followed by a feedforward network. This means the bulk of the “weights” that make up each layer are stored in six matrices<a href="#fn2" class="footnote-ref" id="fnref2" role="doc-noteref"><sup>2</sup></a>, as shown. <span class="math inline">\(\theta\)</span> then, is used as shorthand refer to <em>all</em> the weights, stored in all the matrices across all the layers of the model.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/wvector.svg" class="img-fluid figure-img" style="width:85.0%"></p>
+</figure>
+</div>
+<p>In full finetuning, every single weight in <span class="math inline">\(\theta\)</span> is opened up for updating. Our aim is to produce updated weights that minimize the negative log likelihood (NLL) as shown on the left<a href="#fn3" class="footnote-ref" id="fnref3" role="doc-noteref"><sup>3</sup></a>. There’s no closed form way to get the “optimal” weights, so we solve the optimization problem by repeatedly applying many steps of gradient descent, as shown on the right.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/basic.svg" class="img-fluid figure-img" style="width:85.0%"></p>
+</figure>
+</div>
+<p>Now, directly doing gradient descent this way would quickly lead to overfitting<a href="#fn4" class="footnote-ref" id="fnref4" role="doc-noteref"><sup>4</sup></a>, so we usually regularize the problem. With LLMs, the regularization tool of choice is usually weight decay. Specifically, when using vanilla SGD<a href="#fn5" class="footnote-ref" id="fnref5" role="doc-noteref"><sup>5</sup></a>, weight decay is equivalent to having a term in the loss equal to the squared sum of the weights:</p>
+<p><span class="math display">\[R(\theta)=\sum_i \sum_j[W_{{\color{RoyalBlue}q}}^{\color{PineGreen}{1}}]_{ij}^2+\cdots\]</span></p>
+<p>Hence, the overall objective now is as follows (where <span class="math inline">\(\lambda\)</span> is a hyperparameter controlling the strength of the weight decay):</p>
+<p><span class="math display">\[\min_{\color{YellowOrange}{\theta}} \biggl[\underbrace{-\log P_{\color{YellowOrange}{\theta}}({\color{PineGreen}{y}} \mid {\color{RoyalBlue}{x}})}_{\color{BrickRed}{L}} + \frac{\lambda}{2} R({\color{YellowOrange}{\theta}})\biggr]\]</span></p>
+<p>Differentiating this to objective to get the gradient, we notice the gradient update has two distinct terms<a href="#fn6" class="footnote-ref" id="fnref6" role="doc-noteref"><sup>6</sup></a>: the first corresponding to the minimizing the negative log likelihood as before, and a new second term <span class="math inline">\(-\alpha\lambda w\)</span> that pushes the weight towards the origin <span class="math inline">\(0\)</span>.</p>
+<p><span class="math display">\[
+% https://tex.stackexchange.com/a/9477
+\def\mathunderline#1#2{\color{#1}\underline{{\color{black}#2}}\color{black}}
+\begin{align*}
+&amp;{\color{YellowOrange}{w}} \leftarrow {\color{YellowOrange}{w}} - \alpha \left(\mathunderline{BrickRed}{\frac{\partial \color{BrickRed}{L}}{\partial \color{YellowOrange}{w}}} + \mathunderline{LimeGreen}{\frac{\lambda}{2} \frac{\partial R}{\partial \color{YellowOrange}{w}}} \right)\\
+    \Rightarrow &amp;{\color{YellowOrange}{w}} \leftarrow {\color{YellowOrange}{w}} - \alpha \left(\mathunderline{BrickRed}{\frac{\partial \color{BrickRed}{L}}{\partial \color{YellowOrange}{w}}} + \mathunderline{LimeGreen}{\lambda {\color{YellowOrange}{w}}} \right)\\
+    \Rightarrow &amp;{\color{YellowOrange}{w}} \leftarrow {\color{YellowOrange}{w}} - \alpha \mathunderline{BrickRed}{\frac{\partial \color{BrickRed}{L}}{\partial \color{YellowOrange}{w}}} - \alpha \mathunderline{LimeGreen}{\lambda {\color{YellowOrange}{w}}}
+\end{align*}\]</span></p>
+<p>Which means the regularized problem now looks like:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/regularized.svg" class="img-fluid figure-img" style="width:100.0%"></p>
+</figure>
+</div>
+<p>In summary, adding a squared sum of weights loss is equivalent to subtracting a scaled version of each weight at each gradient descent step. This shifts the minima towards where the weights are closer to <span class="math inline">\(0\)</span><a href="#fn7" class="footnote-ref" id="fnref7" role="doc-noteref"><sup>7</sup></a>; i.e.&nbsp;no one weight can have extremely large effects on the predictions of the model.</p>
+<p>Full finetuning is highly flexible, but also <em>extremely</em> memory intensive: you generally need at least 3x the memory<a href="#fn8" class="footnote-ref" id="fnref8" role="doc-noteref"><sup>8</sup></a> required for the model itself, to account for its gradients and optimizer state. This was not an issue when models were <span class="math inline">\(O(100M)\)</span> params, but is certainly so today where they’re regularly <span class="math inline">\(O(10B)\)</span> to <span class="math inline">\(O(100B)\)</span> params. Moreover, if you have 10 sub-tasks in your application (where you’re tuning the model for each task), full finetuning requires you to host 10 versions of the model (as if hosting 1 isn’t expensive as is!).</p>
+</section>
+<section id="lora-finetuning" class="level3">
+<h3 class="anchored" data-anchor-id="lora-finetuning">LoRA finetuning</h3>
+<p>LoRA (Low Rank Adapter) finetuning takes a different approach: instead of tuning the massive weight matrices of an LLM directly, we use a pair of small adapter matrices for each weight matrix we want to tune, of the following form:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/lora.svg" class="img-fluid figure-img" style="width:100.0%"></p>
+</figure>
+</div>
+<p>That is, for each initial, frozen weight <span class="math inline">\(W_{\text{init}}\)</span>, we have adapter matrices <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span>. These two matrices are multiplied together to form <span class="math inline">\(\Delta W\)</span>, which is a low rank “adjustment” matrix for <span class="math inline">\(W_{\text{init}}\)</span>, forming the adapted, tuned matrix <span class="math inline">\(W\)</span>. This cuts the number of free parameters significantly: assume the original matrix <span class="math inline">\(W_{\text{init}}\)</span> is <span class="math inline">\(4,096 \times 16,384\)</span>. In the original, we’d have 67 million parameters to tune just for this one weight matrix, as follows:</p>
+<p><span class="math display">\[4,096 \times 16,384 = 67,108,864 \approx 67 \text{ million}\]</span></p>
+<p>With LoRA with rank <span class="math inline">\(r=4\)</span>, we only have:</p>
+<p><span class="math display">\[4,096 \times 4 + 4 \times 16,384 = 81,920\]</span></p>
+<p>This is less than 0.1% of the original number of parameters; the added overhead of storing 3 variants of these values (weights, gradients and optimizer states) is negligible compared to the memory used by the model itself.</p>
+<p>Moreover, since the initial weights are “shared” across all the finetuning runs, at inference time we only need to load one copy of the initial model to be shared across many finetuned versions, with inference for each task using their own per-task adapter matrices. This makes having a “per-task” tuned LLM in an application not only viable, but easy.</p>
+</section>
+</section>
+<section id="the-interaction" class="level2">
+<h2 class="anchored" data-anchor-id="the-interaction">The Interaction</h2>
+<p>Now that we’ve covered what LoRA is, we can begin to discuss how it interacts with weight decay to produce a feature/bug. Since <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span> are the “actual” matrices we’re performing gradient descent on, the weight decay term in the objective looks like this, in that we’re moving the minima towards where the adapter matrices are closer to 0:</p>
+<p><span class="math display">\[R(\theta)=\sum_i \sum_j[A_{{\color{RoyalBlue}q}}^{\color{PineGreen}{1}}]_{ij}^2+ \sum_i \sum_j[B_{{\color{RoyalBlue}q}}^{\color{PineGreen}{1}}]_{ij}^2+ \cdots\]</span></p>
+<p>Let’s contrast this with the formulation in full finetuning:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/decayvs.svg" class="img-fluid figure-img" style="width:85.0%"></p>
+</figure>
+</div>
+<ul>
+<li>In full finetuning, we have <span class="math inline">\(W \rightarrow 0\)</span>, in that the weight decays to 0 directly.</li>
+<li>However, in LoRA, because <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span> decay to 0, in effect we have <span class="math inline">\(W \rightarrow W_{\text{init}}\)</span> instead.</li>
+</ul>
+<p>This means LoRA solutions are biased towards the original frozen weight matrices, unlike in full finetuning, where they’re biased towards zero. And this behavior does not go away with increasing the LoRA rank <span class="math inline">\(r\)</span> - one could increase it all the way to infinity(!), and the optimization process would still be biased towards the original frozen weights instead of zero. That is, even in the limit, LoRA does not approximate full finetuning, but a different objective.</p>
+<section id="a-fix" class="level3">
+<h3 class="anchored" data-anchor-id="a-fix">A fix</h3>
+<p>If we wanted the full adapted matrix to go towards zero (as would happen in full finetuning), we’d need a regularization term where the <em>entire adapted</em> weight matrix goes to zero, as follows:</p>
+<p><span class="math display">\[\begin{align*}
+    R(\theta)&amp;=\sum_i \sum_j[W_{{\color{RoyalBlue}q}}^{\color{PineGreen}{1}}]_{ij}^2+\cdots\\
+    &amp;=\sum_i \sum_j[W_{{\color{RoyalBlue}q\color{Black}\text{,init}}}^{\color{PineGreen}{1}} + A_{{\color{RoyalBlue}q}}^{\color{PineGreen}{1}}B_{{\color{RoyalBlue}q}}^{\color{PineGreen}{1}}]_{ij}^2+\cdots
+\end{align*}\]</span></p>
+<p>This is actually straightforward to derive, and yields a pair of update equations that can be implemented much like standard weight decay. First, start at the core definition of weight decay, which involves calculating the gradient of the weight w.r.t. the regularization term:</p>
+<p><span class="math display">\[{\color{YellowOrange}{w}} \leftarrow {\color{YellowOrange}{w}} - \alpha \left(\frac{\partial \color{BrickRed}{L}}{\partial \color{YellowOrange}{w}} + \frac{\lambda}{2} \frac{\partial R}{\partial \color{YellowOrange}{w}} \right)\]</span></p>
+<p>Second, compute the gradient of <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span><a href="#fn9" class="footnote-ref" id="fnref9" role="doc-noteref"><sup>9</sup></a> w.r.t. the “corrected” <span class="math inline">\(R(\theta)\)</span> above. This yields:</p>
+<p><span class="math display">\[\begin{align*}
+    \frac{\partial R}{\partial \color{YellowOrange}{A}}&amp;=2 (W_{\text{init}} + {\color{YellowOrange}{A}}{\color{PineGreen}{B}}) {\color{PineGreen}{B^T}}\\
+    \frac{\partial R}{\partial \color{YellowOrange}{B}}&amp;=2 {\color{PineGreen}{A^T}}(W_{\text{init}} + {\color{PineGreen}{A}}{\color{YellowOrange}{B}})
+\end{align*}\]</span></p>
+<p>Inserting back into the definition of weight decay, we get the following concrete update equations for <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span>:</p>
+<p><span class="math display">\[\begin{align*}
+    {\color{YellowOrange}{A}} &amp;\leftarrow {\color{YellowOrange}{A}} - \alpha \frac{\partial \color{BrickRed}{L}}{\partial \color{YellowOrange}{A}} - \alpha \lambda (W_{\text{init}} + {\color{YellowOrange}{A}}{\color{PineGreen}{B}}) {\color{PineGreen}{B^T}}\\
+    {\color{YellowOrange}{B}} &amp;\leftarrow {\color{YellowOrange}{A}} - \alpha \frac{\partial \color{BrickRed}{L}}{\partial \color{YellowOrange}{A}} - \alpha \lambda {\color{PineGreen}{A^T}}(W_{\text{init}} + {\color{PineGreen}{A}}{\color{YellowOrange}{B}})
+\end{align*}\]</span></p>
+<section id="in-code" class="level4">
+<h4 class="anchored" data-anchor-id="in-code">In code</h4>
+<p>This is what the standard formulation of weight decay in the Optax <span class="citation" data-cites="deepmind2020jax">(<a href="#ref-deepmind2020jax" role="doc-biblioref">Babuschkin et al., 2020</a>)</span> library looks like. It’s quite clean: add a <code>weight_decay</code> (<span class="math inline">\(\lambda\)</span>) scaled version of the parameter <code>p</code> to its current update <code>g</code><a href="#fn10" class="footnote-ref" id="fnref10" role="doc-noteref"><sup>10</sup></a>.</p>
+<div class="cell" data-execution_count="1">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1"></a><span class="co"># from https://github.com/google-deepmind/optax/blob/master/optax/_src/transform.py#L766</span></span>
+<span id="cb1-2"><a href="#cb1-2"></a><span class="kw">def</span> update_fn(updates, state, params):</span>
+<span id="cb1-3"><a href="#cb1-3"></a>    <span class="cf">if</span> params <span class="kw">is</span> <span class="va">None</span>:</span>
+<span id="cb1-4"><a href="#cb1-4"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(base.NO_PARAMS_MSG)</span>
+<span id="cb1-5"><a href="#cb1-5"></a>    updates <span class="op">=</span> jax.tree_util.tree_map(</span>
+<span id="cb1-6"><a href="#cb1-6"></a>        <span class="kw">lambda</span> g, p: g <span class="op">+</span> weight_decay <span class="op">*</span> p, updates, params)</span>
+<span id="cb1-7"><a href="#cb1-7"></a><span class="cf">return</span> updates, state</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>To modify this to implement the math we just described above takes some of extra code, mostly in extracting the <code>W_init</code>, <code>A</code> and <code>B</code> matrices<a href="#fn11" class="footnote-ref" id="fnref11" role="doc-noteref"><sup>11</sup></a>. The core logic is just the two lines 18 and 20.</p>
+<div class="cell" data-execution_count="2">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1"></a><span class="kw">def</span> update_fn(updates, state, params):</span>
+<span id="cb2-2"><a href="#cb2-2"></a>    <span class="kw">def</span> per_param_update_fn(path, update, param):</span>
+<span id="cb2-3"><a href="#cb2-3"></a>        <span class="co"># Get the params dict for the layer as a whole.</span></span>
+<span id="cb2-4"><a href="#cb2-4"></a>        param_name <span class="op">=</span> path[<span class="op">-</span><span class="dv">1</span>].key</span>
+<span id="cb2-5"><a href="#cb2-5"></a>        <span class="co"># If current parameter is an adapter matrix.</span></span>
+<span id="cb2-6"><a href="#cb2-6"></a>        <span class="cf">if</span> param_name <span class="kw">in</span> [<span class="st">'kernelA'</span>, <span class="st">'kernelB'</span>]:</span>
+<span id="cb2-7"><a href="#cb2-7"></a>            layer_params <span class="op">=</span> params</span>
+<span id="cb2-8"><a href="#cb2-8"></a>            <span class="cf">for</span> dict_key <span class="kw">in</span> path[:<span class="op">-</span><span class="dv">1</span>]:</span>
+<span id="cb2-9"><a href="#cb2-9"></a>                layer_params <span class="op">=</span> layer_params[dict_key.key]</span>
+<span id="cb2-10"><a href="#cb2-10"></a></span>
+<span id="cb2-11"><a href="#cb2-11"></a>            <span class="co"># Extract the initial weight matrix and adapter matrices.</span></span>
+<span id="cb2-12"><a href="#cb2-12"></a>            W_init <span class="op">=</span> layer_params[<span class="st">'kernel'</span>]</span>
+<span id="cb2-13"><a href="#cb2-13"></a>            A <span class="op">=</span> layer_params[<span class="st">'kernelA'</span>]</span>
+<span id="cb2-14"><a href="#cb2-14"></a>            B <span class="op">=</span> layer_params[<span class="st">'kernelB'</span>]</span>
+<span id="cb2-15"><a href="#cb2-15"></a></span>
+<span id="cb2-16"><a href="#cb2-16"></a>            <span class="co"># Compute the corrected decay term.</span></span>
+<span id="cb2-17"><a href="#cb2-17"></a>            <span class="cf">if</span> param_name <span class="op">==</span> <span class="st">'kernelA'</span>:</span>
+<span id="cb2-18"><a href="#cb2-18"></a>                decay_term <span class="op">=</span> (W_init <span class="op">+</span> A<span class="op">@</span>B)<span class="op">@</span>B.T</span>
+<span id="cb2-19"><a href="#cb2-19"></a>            <span class="cf">else</span>:</span>
+<span id="cb2-20"><a href="#cb2-20"></a>                decay_term <span class="op">=</span> A.T<span class="op">@</span>(W_init <span class="op">+</span> A<span class="op">@</span>B)</span>
+<span id="cb2-21"><a href="#cb2-21"></a>        </span>
+<span id="cb2-22"><a href="#cb2-22"></a>        <span class="co"># If current parameter is *not* an adapter matrix, use</span></span>
+<span id="cb2-23"><a href="#cb2-23"></a>        <span class="co"># default version of weight decay.</span></span>
+<span id="cb2-24"><a href="#cb2-24"></a>        <span class="cf">else</span>:</span>
+<span id="cb2-25"><a href="#cb2-25"></a>            decay_term <span class="op">=</span> param</span>
+<span id="cb2-26"><a href="#cb2-26"></a></span>
+<span id="cb2-27"><a href="#cb2-27"></a>        <span class="cf">return</span> update <span class="op">+</span> weight_decay <span class="op">*</span> decay_term</span>
+<span id="cb2-28"><a href="#cb2-28"></a></span>
+<span id="cb2-29"><a href="#cb2-29"></a>    <span class="cf">if</span> params <span class="kw">is</span> <span class="va">None</span>:</span>
+<span id="cb2-30"><a href="#cb2-30"></a>      <span class="cf">raise</span> <span class="pp">ValueError</span>(base.NO_PARAMS_MSG)</span>
+<span id="cb2-31"><a href="#cb2-31"></a>    updates <span class="op">=</span> jax.tree_util.tree_map_with_path(</span>
+<span id="cb2-32"><a href="#cb2-32"></a>        per_param_update_fn, updates, params)</span>
+<span id="cb2-33"><a href="#cb2-33"></a>    <span class="cf">return</span> updates, state</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+</section>
+</section>
+<section id="conclusion" class="level2">
+<h2 class="anchored" data-anchor-id="conclusion">Conclusion</h2>
+<p>In summary, LoRA has a different implicit objective than full finetuning, but it’s also easy to correct if desired. That’s it, really!</p>
+<p>To my knowledge, there isn’t literature documenting this interaction of LoRA with weight decay in depth. Conjecturing purely from first principles<a href="#fn12" class="footnote-ref" id="fnref12" role="doc-noteref"><sup>12</sup></a>, I’d argue the default behavior is both a feature <em>and</em> a bug, depending on the amount of data - when there’s a very few number of training points, it is a feature <em>because</em> it regularizes the updated model to stay close to the initial, “generally-capable” one. However, it’s a <em>bug</em> when given large amounts of data, as the optimization process is less capable of straying too far from the base weights, <em>even if</em> it would aid end-task performance.</p>
+<p>That said, as neat as the math is, empirical results are the only truth here. With so many free parameters, it may well turn out to be in practice there are solutions just as good (when regularized to be close to <span class="math inline">\(W_{\text{init}}\)</span>) as full finetuning (regularized close to <span class="math inline">\(0\)</span>) given enough capacity.</p>
+</section>
+<section id="appendix-a-momentum-and-weight-decay" class="level2 page-columns page-full">
+<h2 class="anchored" data-anchor-id="appendix-a-momentum-and-weight-decay">Appendix A: Momentum and Weight Decay</h2>
+<p>One odd thing you’ve likely noticed is that I spent a substantial amount of time explicitly working out the gradient for the regularizer term <span class="math inline">\(R(\theta)\)</span>, instead of just directly absorbing it into <span class="math inline">\(L\)</span> and letting autodiff take care of all this for me. That’s because the equivalency (weight decay of gradients = adding an <span class="math inline">\(L_2\)</span> regularization term to the loss) is only true for non-momentum based optimizers like vanilla SGD, <em>not</em> momentum based optimizers such as Adam<span class="citation" data-cites="adam">(<a href="#ref-adam" role="doc-biblioref">Kingma &amp; Ba, 2015</a>)</span> or AdamW <span class="citation" data-cites="loshchilov2018decoupled">(<a href="#ref-loshchilov2018decoupled" role="doc-biblioref">Loshchilov &amp; Hutter, 2019</a>)</span>.</p>
+<p>The AdamW paper<a href="#fn13" class="footnote-ref" id="fnref13" role="doc-noteref"><sup>13</sup></a> is a solid, in-depth read to understand why this is the case, but in brief: to do weight decay we want to subtract away a scaled version of the parameter’s value <em>at the current timestep</em>. However, adding an <span class="math inline">\(L_2\)</span> regularization term to the loss directly means the regularization gradient is added to the <em>momentum</em> state of the optimizer: the <em>past</em> value of the parameter now influence its weight decay, not just the current value. The overall effect here is parameters which had “large” values early in training are regularized <em>less</em>, defeating the point of weight decay!</p>
+<p>The way modern optimization libraries such as Optax implement AdamW is by first implementing Adam’s transformation of the gradient as a seperate subroutine <span class="math inline">\(\text{adam}\)</span>, that:</p>
+<div class="page-columns page-full"><p></p><div class="no-row-height column-margin column-container"><span class="">Note that this is <em>not</em> a simplification, the Optax library has an actual function called <code>scale_by_adam</code> <a href="https://github.com/google-deepmind/optax/blob/master/optax/_src/transform.py#L307">here</a> that does exactly this.</span></div></div>
+<ul>
+<li>takes in the NLL loss gradient <span class="math inline">\(\frac{\partial L}{\partial w} = g\)</span></li>
+<li>as well as past optimizer states <span class="math inline">\((m, v)\)</span></li>
+<li>return a “transformed” gradient, an update <span class="math inline">\(u_t\)</span>, that is, <span class="math inline">\(\text{adam}(g, m, v) \rightarrow u\)</span>.</li>
+</ul>
+<p>From there on out, the weight decay looks just like it did before, but swapping in <span class="math inline">\(u\)</span>.</p>
+<p><span class="math display">\[{\color{YellowOrange}{w}} \leftarrow {\color{YellowOrange}{w}} - \alpha \left(u + \frac{\lambda}{2} \frac{\partial R}{\partial \color{YellowOrange}{w}} \right)\]</span></p>
+<p>Which means, a version of our corrected (decays to 0) LoRA update that is compatible with AdamW looks like:</p>
+<div class="page-columns page-full"><p><span class="math display">\[\begin{align*}
+    {\color{YellowOrange}{A}} &amp;\leftarrow {\color{YellowOrange}{A}} - \alpha u  - \alpha \lambda (W_{\text{init}} + {\color{YellowOrange}{A}}{\color{PineGreen}{B}}) {\color{PineGreen}{B^T}}\\
+    {\color{YellowOrange}{B}} &amp;\leftarrow {\color{YellowOrange}{A}} - \alpha u - \alpha \lambda {\color{PineGreen}{A^T}}(W_{\text{init}} + {\color{PineGreen}{A}}{\color{YellowOrange}{B}})
+\end{align*}\]</span></p><div class="no-row-height column-margin column-container"><span class="">An alternate, equivalent way to look at this is that we use Adam on the NLL loss, and pure SGD on the <span class="math inline">\(R(\theta)\)</span> loss</span></div></div>
+<p>The code snippet above (implementing the decay to 0 LoRA) is actually already compatible with AdamW in Optax. This very nice behavior comes mostly from free because of the fact AdamW in Optax is <em>already</em> a decomposed chain of three operators (<span class="math inline">\(\text{adam}\)</span>, weight decay, and then scaling by the learning rate); Optax’s actual implementation is as follows:</p>
+<div class="cell" data-execution_count="3">
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1"></a><span class="co"># from https://github.com/google-deepmind/optax/blob/master/optax/_src/alias.py#L298</span></span>
+<span id="cb3-2"><a href="#cb3-2"></a><span class="cf">return</span> combine.chain(</span>
+<span id="cb3-3"><a href="#cb3-3"></a>      transform.scale_by_adam(</span>
+<span id="cb3-4"><a href="#cb3-4"></a>          b1<span class="op">=</span>b1, b2<span class="op">=</span>b2, eps<span class="op">=</span>eps, eps_root<span class="op">=</span>eps_root, mu_dtype<span class="op">=</span>mu_dtype),</span>
+<span id="cb3-5"><a href="#cb3-5"></a>      transform.add_decayed_weights(weight_decay, mask),</span>
+<span id="cb3-6"><a href="#cb3-6"></a>      _scale_by_learning_rate(learning_rate),</span>
+<span id="cb3-7"><a href="#cb3-7"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>All we’d need to do is create a new optimizer, where we swap in the <code>transform.add_decayed_weights</code> with our custom version, and we’d be set.</p>
+
+
+
+</section>
+
+
+<div id="quarto-appendix" class="default"><section class="quarto-appendix-contents" role="doc-bibliography"><h2 class="anchored quarto-appendix-heading">References</h2><div id="refs" class="references csl-bib-body hanging-indent" data-line-spacing="2" role="list">
+<div id="ref-deepmind2020jax" class="csl-entry" role="listitem">
+Babuschkin, I., Baumli, K., Bell, A., Bhupatiraju, S., Bruce, J., Buchlovsky, P., Budden, D., Cai, T., Clark, A., Danihelka, I., Dedieu, A., Fantacci, C., Godwin, J., Jones, C., Hemsley, R., Hennigan, T., Hessel, M., Hou, S., Kapturowski, S., … Viola, F. (2020). <em>The <span>D</span>eep<span>M</span>ind <span>JAX</span> <span>E</span>cosystem</em>. <a href="http://github.com/deepmind">http://github.com/deepmind</a>
+</div>
+<div id="ref-brown2020language" class="csl-entry" role="listitem">
+Brown, T. B., Mann, B., Ryder, N., Subbiah, M., Kaplan, J., Dhariwal, P., Neelakantan, A., Shyam, P., Sastry, G., Askell, A., Agarwal, S., Herbert-Voss, A., Krueger, G., Henighan, T., Child, R., Ramesh, A., Ziegler, D. M., Wu, J., Winter, C., … Amodei, D. (2020). <em>Language models are few-shot learners</em>. <a href="https://arxiv.org/abs/2005.14165">https://arxiv.org/abs/2005.14165</a>
+</div>
+<div id="ref-hu2021lora" class="csl-entry" role="listitem">
+Hu, E. J., Shen, Y., Wallis, P., Allen-Zhu, Z., Li, Y., Wang, S., Wang, L., &amp; Chen, W. (2021). <em>LoRA: Low-rank adaptation of large language models</em>. <a href="https://arxiv.org/abs/2106.09685">https://arxiv.org/abs/2106.09685</a>
+</div>
+<div id="ref-adam" class="csl-entry" role="listitem">
+Kingma, D. P., &amp; Ba, J. (2015). Adam: <span>A</span> method for stochastic optimization. In Y. Bengio &amp; Y. LeCun (Eds.), <em>3rd international conference on learning representations, <span>ICLR</span> 2015, san diego, CA, USA, may 7-9, 2015, conference track proceedings</em>. <a href="http://arxiv.org/abs/1412.6980">http://arxiv.org/abs/1412.6980</a>
+</div>
+<div id="ref-loshchilov2018decoupled" class="csl-entry" role="listitem">
+Loshchilov, I., &amp; Hutter, F. (2019). Decoupled weight decay regularization. <em>International Conference on Learning Representations</em>. <a href="https://openreview.net/forum?id=Bkg6RiCqY7">https://openreview.net/forum?id=Bkg6RiCqY7</a>
+</div>
+<div id="ref-shazeer2020glu" class="csl-entry" role="listitem">
+Shazeer, N. (2020). <em>GLU variants improve transformer</em>. <a href="https://arxiv.org/abs/2002.05202">https://arxiv.org/abs/2002.05202</a>
+</div>
+</div></section><section id="footnotes" class="footnotes footnotes-end-of-document" role="doc-endnotes"><h2 class="anchored quarto-appendix-heading">Footnotes</h2>
+
+<ol>
+<li id="fn1"><p>In the database query example, the <span class="math inline">\(x\)</span>’s can be strings in English, and the <span class="math inline">\(y\)</span>’s are then strings corresponding to the query translated from English into the query schema.<a href="#fnref1" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn2"><p>Note that if you use a GLU-variant activation <span class="citation" data-cites="shazeer2020glu">(<a href="#ref-shazeer2020glu" role="doc-biblioref">Shazeer, 2020</a>)</span>, then you add in a 7th “gating” weight matrix.<a href="#fnref2" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn3"><p>This is the precise mathematical definition of what we just described: a function whose minimization makes our finetuning training data <span class="math inline">\({(x_i, y_i)_n}\)</span> “more likely” to be generated.<a href="#fnref3" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn4"><p>In that the weights would all be optimized to perfectly repeat <span class="math inline">\(y_i\)</span> for any <span class="math inline">\(x_i\)</span> in the finetuning training set, at the <em>expense</em> of performing <em>much</em> worse on any <span class="math inline">\(x_i\)</span> not in the training set.<a href="#fnref4" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn5"><p><a href="https://en.wikipedia.org/wiki/Stochastic_gradient_descent">Stochastic Gradient Descent</a>, a.k.a. the core workhorse of deep learning. In practice we use more sophisticated momentum-based methods, whose impact is described in Appendix A.<a href="#fnref5" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn6"><p>This directly stems from the fact that the gradient of a sum (here, the two terms are NLL and regularization) equals the sum of the gradients (of each term).<a href="#fnref6" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn7"><p>To reason why this is true, notice that the larger the weight, the “more” of it is subtracted away from itself.<a href="#fnref7" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn8"><p>Assuming you’re using an optimizer with some form of momentum (vanilla SGD doesn’t need an optimizer state). It goes up to 4x for Adam, as it has two states: an exponential moving average of both the gradient means, and the gradient-squared means.<a href="#fnref8" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn9"><p>We’re dropping the <span class="math inline">\(q, k,...\)</span> subscripts as the derivation is identical for all the weight matrices.<a href="#fnref9" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn10"><p>We add terms to the update, as the <em>subtraction</em> of the update happens at the very end.<a href="#fnref10" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn11"><p>This exact formulation assumes the adapters are defined inside the same layer as the original matrix; that is the params dict looks like <code>{'params': {'kernel': ..., 'kernelA': ..., 'kernelB': ...}}</code>. The actual implementation will depend on how the LoRA adapters have been defined (even though the underlying math will remain the same).<a href="#fnref11" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn12"><p>Which, in classic deep learning fashion could turn out to be wholly incorrect.<a href="#fnref12" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn13"><p>Which pointed out this non-equivalency, and produced a version of Adam that “decoupled” weight decay.<a href="#fnref13" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+</ol>
+</section><section class="quarto-appendix-contents"><h2 class="anchored quarto-appendix-heading">Citation</h2><div><div class="quarto-appendix-secondary-label">BibTeX citation:</div><pre class="sourceCode code-with-copy quarto-appendix-bibtex"><code class="sourceCode bibtex">@online{shafkat2023,
+  author = {Shafkat, Irhum},
+  title = {LoRA and {Weight} {Decay}},
+  date = {2023-09-27},
+  url = {https://irhum.github.io/blog/lorawd/},
+  langid = {en}
+}
+</code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre><div class="quarto-appendix-secondary-label">For attribution, please cite this work as:</div><div id="ref-shafkat2023" class="csl-entry quarto-appendix-citeas" role="listitem">
+Shafkat, I. (2023, September 27). <em>LoRA and Weight Decay</em>. <a href="https://irhum.github.io/blog/lorawd/">https://irhum.github.io/blog/lorawd/</a>
+</div></div></section></div></main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>
