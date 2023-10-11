@@ -6,10 +6,10 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2023-10-06">
-<meta name="description" content="Or: how I learned to stop worrying and learn the scaling laws">
+<meta name="dcterms.date" content="2023-10-11">
+<meta name="description" content="How to (and not to) interpret the scaling laws">
 
-<title>irhum.github.io - [DRAFT] Thoughts on Chinchilla</title>
+<title>irhum.github.io - Thoughts on Chinchilla</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -85,8 +85,8 @@ div.csl-indent {
   <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
   <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
 
-<meta name="twitter:title" content="irhum.github.io - [DRAFT] Thoughts on Chinchilla">
-<meta name="twitter:description" content="Or: how I learned to stop worrying and learn the scaling laws">
+<meta name="twitter:title" content="irhum.github.io - Thoughts on Chinchilla">
+<meta name="twitter:description" content="How to (and not to) interpret the scaling laws">
 <meta name="twitter:image" content="assets/index.png">
 <meta name="twitter:card" content="summary_large_image">
 </head>
@@ -133,10 +133,10 @@ div.csl-indent {
 <header id="title-block-header" class="quarto-title-block default page-columns page-full">
   <div class="quarto-title-banner page-columns page-full">
     <div class="quarto-title column-body">
-      <h1 class="title">[DRAFT] Thoughts on Chinchilla</h1>
+      <h1 class="title">Thoughts on Chinchilla</h1>
                   <div>
         <div class="description">
-          Or: how I learned to stop worrying and learn the scaling laws
+          How to (and not to) interpret the scaling laws
         </div>
       </div>
                           <div class="quarto-categories">
@@ -153,7 +153,7 @@ div.csl-indent {
       <div>
       <div class="quarto-title-meta-heading">Published</div>
       <div class="quarto-title-meta-contents">
-        <p class="date">October 6, 2023</p>
+        <p class="date">October 11, 2023</p>
       </div>
     </div>
     
@@ -174,8 +174,10 @@ div.csl-indent {
   <li><a href="#compute" id="toc-compute" class="nav-link" data-scroll-target="#compute">Compute</a></li>
   <li><a href="#optimal" id="toc-optimal" class="nav-link" data-scroll-target="#optimal">Optimal</a></li>
   </ul></li>
-  <li><a href="#chinchilla-isoflop-curves" id="toc-chinchilla-isoflop-curves" class="nav-link" data-scroll-target="#chinchilla-isoflop-curves">Chinchilla IsoFLOP curves</a>
+  <li><a href="#chinchilla-scaling" id="toc-chinchilla-scaling" class="nav-link" data-scroll-target="#chinchilla-scaling">Chinchilla Scaling</a>
   <ul>
+  <li><a href="#calculating-an-isoflop-curve" id="toc-calculating-an-isoflop-curve" class="nav-link" data-scroll-target="#calculating-an-isoflop-curve">Calculating an IsoFLOP curve</a></li>
+  <li><a href="#model-scaling" id="toc-model-scaling" class="nav-link" data-scroll-target="#model-scaling">Model Scaling</a></li>
   <li><a href="#data-scaling" id="toc-data-scaling" class="nav-link" data-scroll-target="#data-scaling">Data Scaling</a></li>
   <li><a href="#generality" id="toc-generality" class="nav-link" data-scroll-target="#generality">Generality</a>
   <ul class="collapse">
@@ -184,14 +186,19 @@ div.csl-indent {
   </ul></li>
   <li><a href="#chinchilla-in-practice" id="toc-chinchilla-in-practice" class="nav-link" data-scroll-target="#chinchilla-in-practice">Chinchilla in practice</a>
   <ul>
-  <li><a href="#about-loss" id="toc-about-loss" class="nav-link" data-scroll-target="#about-loss">About Loss</a></li>
-  <li><a href="#inference-costs" id="toc-inference-costs" class="nav-link" data-scroll-target="#inference-costs">Inference Costs</a>
+  <li><a href="#compute-optimal" id="toc-compute-optimal" class="nav-link" data-scroll-target="#compute-optimal">Compute optimal?</a>
   <ul class="collapse">
-  <li><a href="#payoff" id="toc-payoff" class="nav-link" data-scroll-target="#payoff">Payoff</a></li>
+  <li><a href="#inference-costs" id="toc-inference-costs" class="nav-link" data-scroll-target="#inference-costs">Inference Costs</a></li>
+  <li><a href="#latency" id="toc-latency" class="nav-link" data-scroll-target="#latency">Latency</a></li>
   </ul></li>
+  <li><a href="#loss-neq-performance" id="toc-loss-neq-performance" class="nav-link" data-scroll-target="#loss-neq-performance">Loss <span class="math inline">\(\neq\)</span> Performance</a></li>
   </ul></li>
-  <li><a href="#conclusion" id="toc-conclusion" class="nav-link" data-scroll-target="#conclusion">Conclusion</a></li>
+  <li><a href="#conclusion" id="toc-conclusion" class="nav-link" data-scroll-target="#conclusion">Conclusion</a>
+  <ul>
+  <li><a href="#acknowledgements" id="toc-acknowledgements" class="nav-link" data-scroll-target="#acknowledgements">Acknowledgements</a></li>
+  </ul></li>
   <li><a href="#appendix-a-pre-chinchilla-scaling" id="toc-appendix-a-pre-chinchilla-scaling" class="nav-link" data-scroll-target="#appendix-a-pre-chinchilla-scaling">Appendix A: Pre-Chinchilla Scaling</a></li>
+  <li><a href="#appendix-b-deriving-c-approx-6nd" id="toc-appendix-b-deriving-c-approx-6nd" class="nav-link" data-scroll-target="#appendix-b-deriving-c-approx-6nd">Appendix B: Deriving <span class="math inline">\(C \approx 6ND\)</span></a></li>
   </ul>
 </nav>
     </div>
@@ -201,106 +208,125 @@ div.csl-indent {
 
 
 
-<p>In a field where the “big ideas” seem to change on a weekly basis, Chinchilla <span class="citation" data-cites="hoffmann2022training">(<a href="#ref-hoffmann2022training" role="doc-biblioref">Hoffmann et al., 2022</a>)</span> is a standout paper: it came out a little over 18 months ago, and found then-LLMs to be massively undertrained compared to their model size, with the then dominant scaling laws <span class="citation" data-cites="kaplan2020scaling">(<a href="#ref-kaplan2020scaling" role="doc-biblioref">Kaplan et al., 2020</a>)</span> suggesting models be scaled 3x faster than the dataset size.</p>
-<div class="page-columns page-full"><p><img src="assets/prior.png" class="img-fluid" style="width:100.0%" data-fig-align="center"></p><div class="no-row-height column-margin column-container"><span class="">Pre-Chinchilla models (such as Gopher <span class="citation" data-cites="rae2022scaling">(<a href="#ref-rae2022scaling" role="doc-biblioref">Rae et al., 2022</a>)</span>) tended to use the 3:1 scaling implied by <span class="citation" data-cites="kaplan2020scaling">Kaplan et al. (<a href="#ref-kaplan2020scaling" role="doc-biblioref">2020</a>)</span>, whereas post-Chinchilla models use 1:1 scaling. Fig 1 from the paper.</span></div></div>
-<p>Chinchilla, by accounting for the effect of the learning rate scheduler, proposed that model size and dataset size should in fact be scaled in a 1:1 ratio. This meant that the (then) largest 500B+ parameter models (such as PaLM 540B <span class="citation" data-cites="chowdhery2022palm">(<a href="#ref-chowdhery2022palm" role="doc-biblioref">Chowdhery et al., 2022</a>)</span> or MT-NLG 530B <span class="citation" data-cites="smith2022using">(<a href="#ref-smith2022using" role="doc-biblioref">Smith et al., 2022</a>)</span>) were substantially undertrained, and would need several orders of magnitude more compute than was available for that size to be “optimal”<a href="#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a>. This triggered an industry-wide shift towards smaller models trained for longer (for a given compute budget).</p>
+<p>In a field where the “big ideas” seem to change on a weekly basis, Chinchilla <span class="citation" data-cites="hoffmann2022training">(<a href="#ref-hoffmann2022training" role="doc-biblioref">Hoffmann et al., 2022</a>)</span> is a standout paper: it came out a little over 18 months ago, and found then-LLMs to be massively undertrained compared to their model size, with the then dominant scaling laws <span class="citation" data-cites="kaplan2020scaling">(<a href="#ref-kaplan2020scaling" role="doc-biblioref">Kaplan et al., 2020</a>)</span> suggesting that on log-log scales, model size <span class="math inline">\(N\)</span> be scaled ~3x (2.7x) faster than the dataset size <span class="math inline">\(D\)</span><a href="#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a>.</p>
+<div class="quarto-figure quarto-figure-center page-columns page-full">
+<figure class="figure page-columns page-full">
+<p><img src="assets/prior.png" class="img-fluid figure-img" style="width:100.0%"></p>
+<figcaption class="figure-caption margin-caption">Pre-Chinchilla models (such as Gopher <span class="citation" data-cites="rae2022scaling">(<a href="#ref-rae2022scaling" role="doc-biblioref">Rae et al., 2022</a>)</span>) tended to use the 3:1 scaling implied by <span class="citation" data-cites="kaplan2020scaling">Kaplan et al. (<a href="#ref-kaplan2020scaling" role="doc-biblioref">2020</a>)</span>, whereas post-Chinchilla models use 1:1 scaling. Fig 1 from <span class="citation" data-cites="hoffmann2022training">Hoffmann et al. (<a href="#ref-hoffmann2022training" role="doc-biblioref">2022</a>)</span>.</figcaption>
+</figure>
+</div>
+<p>Chinchilla, by accounting for the effect of the learning rate scheduler, proposed that model size and dataset size should in fact be scaled in a 1:1 ratio. This meant that the (then) largest 500B+ parameter models (such as PaLM 540B <span class="citation" data-cites="chowdhery2022palm">(<a href="#ref-chowdhery2022palm" role="doc-biblioref">Chowdhery et al., 2022</a>)</span> or MT-NLG 530B <span class="citation" data-cites="smith2022using">(<a href="#ref-smith2022using" role="doc-biblioref">Smith et al., 2022</a>)</span>) were substantially undertrained<a href="#fn2" class="footnote-ref" id="fnref2" role="doc-noteref"><sup>2</sup></a>, and would need several orders of magnitude more compute than was available for that size to be “optimal”<a href="#fn3" class="footnote-ref" id="fnref3" role="doc-noteref"><sup>3</sup></a>. This triggered an industry-wide shift towards smaller models trained for longer (for a given compute budget).</p>
 <p>Let’s dive deeper into the scaling laws, how they were derived, their implications for LLM training runs, how to (and not to) interpret them.</p>
-<section id="whats-compute-optimal" class="level2">
+<section id="whats-compute-optimal" class="level2 page-columns page-full">
 <h2 class="anchored" data-anchor-id="whats-compute-optimal">What’s compute optimal?</h2>
-<p>There’s two words in the phrase “compute optimal”, so let’s examine them one at a time.</p>
-<section id="compute" class="level3">
+<p>Chinchilla’s focus is on training models that are “compute optimal”: in this context, creating a model with the lowest loss for a given, fixed amount of compute <span class="math inline">\(C\)</span>. There’s two words in the phrase “compute optimal”, so let’s examine them both.</p>
+<section id="compute" class="level3 page-columns page-full">
 <h3 class="anchored" data-anchor-id="compute">Compute</h3>
-<p>Before beginning a training run, we can estimate the total number of FLOPs<a href="#fn2" class="footnote-ref" id="fnref2" role="doc-noteref"><sup>2</sup></a> a run will have available from just four factors:</p>
+<div class="page-columns page-full"><p>Before beginning a training run, we can estimate the total number of FLOPs (Floating Point Operations) a run will have available from just four factors:</p><div class="no-row-height column-margin column-container"><span class="">FLOPs measure the number of individual arithmetic operations on floating point numbers a larger computation (such as a matrix multiply) will use.</span></div></div>
 <ul>
-<li>The FLOPs/sec per chip.</li>
+<li>The FLOPs/sec<a href="#fn4" class="footnote-ref" id="fnref4" role="doc-noteref"><sup>4</sup></a> per chip.</li>
 <li>The number of chips.</li>
 <li>How long (in hours/days) we plan the run to be.</li>
-<li>The MFU of the run. MFU is the % of maximum FLOPs your chips can actually use towards training your model.<a href="#fn3" class="footnote-ref" id="fnref3" role="doc-noteref"><sup>3</sup></a></li>
+<li>The MFU (Model FLOPs/sec Utilization) of the run. MFU is the % of maximum FLOPs/sec your chips can actually use towards training your model.<a href="#fn5" class="footnote-ref" id="fnref5" role="doc-noteref"><sup>5</sup></a></li>
 </ul>
 <p>So, suppose I have access to 64 H100s for 1 week, and initial tests reveal my MFU is 50%. Then, the total FLOPs available during this run is:</p>
 <p><span class="math display">\[\frac{989 \times 10^{12}\text{ FLOPs}}{\text{second} \cdot \text{H100}} \times 604800 \text{ seconds} \times 64 \text{ H100} \times 50\% = 1.91 \times 10^{22} \text{ FLOPs}\]</span></p>
 <p>Assuming the chips cost 4$/hour, this is a 43K$ training run! That is a lot of money to be spending, even on a run quite small by LLM standards. You’d want this money spent optimally (under some definition of optimal), and this is where Chinchilla comes in.</p>
 </section>
-<section id="optimal" class="level3">
+<section id="optimal" class="level3 page-columns page-full">
 <h3 class="anchored" data-anchor-id="optimal">Optimal</h3>
-<p>There are two factors that influence the amount of FLOPs a run uses: The size of the model <span class="math inline">\(N\)</span>, and the number of tokens <span class="math inline">\(D\)</span>. A commonly used approximation to the number of FLOPs a training run uses (the cost <span class="math inline">\(C\)</span>) is</p>
-<p><span class="math display">\[C \approx 6ND\]</span></p>
-<p>Note the directly inverse relationship between model size and tokens used here: for a fixed FLOPs budget <span class="math inline">\(C\)</span>, doubling the model size <span class="math inline">\(N\)</span> means it can only “see” half as many tokens <span class="math inline">\(D\)</span> during training<a href="#fn4" class="footnote-ref" id="fnref4" role="doc-noteref"><sup>4</sup></a>. There’s a sweet spot to strike here: a model not so small it doesn’t have enough capacity to learn from too many tokens, but not so large it barely sees enough tokens to make use of the added capacity.</p>
+<p>There are two factors that influence the amount of FLOPs a run uses: The size of the model <span class="math inline">\(N\)</span>, and the number of tokens <span class="math inline">\(D\)</span>. A commonly used approximation (introduced in <span class="citation" data-cites="kaplan2020scaling">(<a href="#ref-kaplan2020scaling" role="doc-biblioref">Kaplan et al., 2020</a>)</span>) to the number of FLOPs a training run uses (the cost <span class="math inline">\(C\)</span>) is</p>
+<div class="page-columns page-full"><p><span class="math display">\[C \approx 6ND\]</span> </p><div class="no-row-height column-margin column-container"><span class="">A derivation of this approximation can be found in Appendix B.</span></div></div>
+<p>Note the directly inverse relationship between model size and tokens used here: for a fixed FLOPs budget <span class="math inline">\(C\)</span>, doubling the model size <span class="math inline">\(N\)</span> means it can only “see” half as many tokens <span class="math inline">\(D\)</span> during training<a href="#fn6" class="footnote-ref" id="fnref6" role="doc-noteref"><sup>6</sup></a>. There’s a sweet spot to strike here: a model not so small it doesn’t have enough capacity to learn from too many tokens, but not so large it barely sees enough tokens to make use of the added capacity.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="assets/optimal.svg" class="img-fluid figure-img" style="width:80.0%"></p>
 </figure>
 </div>
-<p>Which N and D is best? The answer is in the scaling law literature <span class="citation" data-cites="kaplan2020scaling">(<a href="#ref-kaplan2020scaling" role="doc-biblioref">Kaplan et al., 2020</a>, Sec 6.1)</span>: the “optimal” <span class="math inline">\((N_{\text{opt}}, D_{\text{opt}})\)</span> are the ones that produce a model that achieves the lowest loss on a validation set of the pretraining data, subject to the fixed cost constraint (the green star above).</p>
+<div class="page-columns page-full"><p>Which N and D is best? The answer is in the scaling law literature <span class="citation" data-cites="kaplan2020scaling">(<a href="#ref-kaplan2020scaling" role="doc-biblioref">Kaplan et al., 2020</a>, Sec 6.1)</span>: the “optimal” <span class="math inline">\((N_{\text{opt}}, D_{\text{opt}})\)</span> are the ones that produce a model that achieves the lowest loss on a validation set of the pretraining data, subject to the fixed cost constraint (the green star above). </p><div class="no-row-height column-margin column-container"><span class="">A deeper dive on the findings of <span class="citation" data-cites="kaplan2020scaling">Kaplan et al. (<a href="#ref-kaplan2020scaling" role="doc-biblioref">2020</a>)</span>, and how Chinchilla built on those findings can be found in Appendix A.</span></div></div>
 <p>Chinchilla’s general approach then, is to compute <span class="math inline">\((N_{\text{opt}}, D_{\text{opt}})\)</span> for a few small values of <span class="math inline">\(C\)</span>, and use them to extrapolate <span class="math inline">\((N_{\text{opt}}, D_{\text{opt}})\)</span> for the <span class="math inline">\(C\)</span> equivalent to the full training run.</p>
 </section>
 </section>
-<section id="chinchilla-isoflop-curves" class="level2">
-<h2 class="anchored" data-anchor-id="chinchilla-isoflop-curves">Chinchilla IsoFLOP curves</h2>
-<p>The full Chinchilla paper uses three different methods (fixed model size, fixed FLOPs and parametric fitting) to estimate the scaling behavior between model size and data, with similar results across all three. We focus on approach 2, where they use a set of 9 different FLOPs counts (from <span class="math inline">\(6 \times 10^{18}\)</span> to <span class="math inline">\(3 × 10^{21}\)</span>). The method is as follows:</p>
-<p>First, for a given <span class="math inline">\(C\)</span>, train multiple models, varying <span class="math inline">\(N\)</span> and <span class="math inline">\(D\)</span> such that the FLOPs count remains <span class="math inline">\(C\)</span><a href="#fn5" class="footnote-ref" id="fnref5" role="doc-noteref"><sup>5</sup></a>. Compute the loss <span class="math inline">\(L\)</span> of each model, producing a plot like this:</p>
+<section id="chinchilla-scaling" class="level2 page-columns page-full">
+<h2 class="anchored" data-anchor-id="chinchilla-scaling">Chinchilla Scaling</h2>
+<p>The full Chinchilla paper uses three different methods (fixed model size, fixed FLOPs and parametric fitting) to estimate the scaling behavior between model size and data, with similar results across all three. We focus on approach 2, where they use a set of 9 different FLOPs counts (from <span class="math inline">\(6 \times 10^{18}\)</span> to <span class="math inline">\(3 \times 10^{21}\)</span>). The method is as follows:</p>
+<section id="calculating-an-isoflop-curve" class="level3 page-columns page-full">
+<h3 class="anchored" data-anchor-id="calculating-an-isoflop-curve">Calculating an IsoFLOP curve</h3>
+<div class="page-columns page-full"><p>First, for a given <span class="math inline">\(C\)</span>, train multiple models, varying <span class="math inline">\(N\)</span> and <span class="math inline">\(D\)</span> such that the FLOPs count remains <span class="math inline">\(C\)</span>. Compute the validation loss <span class="math inline">\(L\)</span> of each model, producing a plot like this:</p><div class="no-row-height column-margin column-container"><span class="">Note that the Chinchilla paper uses a more detailed approach to calculating <span class="math inline">\(C\)</span> than <span class="citation" data-cites="kaplan2020scaling">Kaplan et al. (<a href="#ref-kaplan2020scaling" role="doc-biblioref">2020</a>)</span>’s <span class="math inline">\(C\approx 6ND\)</span> approximation, explained in Appendix F. The <span class="math inline">\(C\approx 6ND\)</span> approximation is within 10% across two orders of magnitude (Table A4), so it’s still a good mental model!</span></div></div>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="assets/guess.svg" class="img-fluid figure-img" style="width:90.0%"></p>
 </figure>
 </div>
-<p>Then, fit a parabola to the points <span class="math inline">\((\log(N), L)\)</span>. This allows us to predict the loss of each model of size <span class="math inline">\(N\)</span> trained under the fixed amount of compute <span class="math inline">\(C\)</span>. The authors call this an IsoFLOP curve<a href="#fn6" class="footnote-ref" id="fnref6" role="doc-noteref"><sup>6</sup></a>, and it allows us to find <span class="math inline">\(N_{\text{opt}}\)</span>, the model size with the lowest loss for that <span class="math inline">\(C\)</span>.</p>
+<p>Then, fit a parabola to the points <span class="math inline">\((\log N, L)\)</span>. This allows us to predict the loss of each model of size <span class="math inline">\(N\)</span> trained under the fixed amount of compute <span class="math inline">\(C\)</span>. The authors call this an IsoFLOP curve<a href="#fn7" class="footnote-ref" id="fnref7" role="doc-noteref"><sup>7</sup></a>, and it allows us to find <span class="math inline">\(N_{\text{opt}}\)</span>, the model size with the lowest loss for that <span class="math inline">\(C\)</span>.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="assets/guess2.svg" class="img-fluid figure-img" style="width:90.0%"></p>
 </figure>
 </div>
-<p>This process is then repeated for each of the 9 values of <span class="math inline">\(C\)</span>, resulting in the full IsoFLOP curves plot (Figure 3) from the paper:</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
+<p>This process is then repeated for each of the 9 values of <span class="math inline">\(C\)</span>, resulting in the full IsoFLOP curves plot:</p>
+<div class="quarto-figure quarto-figure-center page-columns page-full">
+<figure class="figure page-columns page-full">
 <p><img src="assets/isoflop.png" class="img-fluid figure-img" style="width:60.0%"></p>
+<figcaption class="figure-caption margin-caption">Figure 3 (left) from <span class="citation" data-cites="hoffmann2022training">Hoffmann et al. (<a href="#ref-hoffmann2022training" role="doc-biblioref">2022</a>)</span></figcaption>
 </figure>
 </div>
-<p>Each of these 9 curves have one value of <span class="math inline">\(N_{\text{opt}}\)</span>. The authors then fit a power law <span class="math inline">\(N_{\text{opt}} = AC^a\)</span> to the points <span class="math inline">\((C, N_{\text{opt}})\)</span>. This is where the scaling law appears: when <span class="math inline">\(a=0.49 \approx 0.5\)</span>, they obtain a very tight fit to the empirically calculated <span class="math inline">\(N_{\text{opt}}\)</span> values. This allows them to extrapolate the best model size (66B) for Chinchilla’s full run of <span class="math inline">\(5.76 \times 10^{23}\)</span> FLOPs, two orders of magnitude larger than the largest IsoFLOP curve of <span class="math inline">\(3\times10^{21}\)</span> FLOPs.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
+</section>
+<section id="model-scaling" class="level3 page-columns page-full">
+<h3 class="anchored" data-anchor-id="model-scaling">Model Scaling</h3>
+<p>Each of these 9 curves above have one value of <span class="math inline">\(N_{\text{opt}}\)</span>. The authors then fit a power law <span class="math inline">\(N_{\text{opt}} = AC^a\)</span> to the points <span class="math inline">\((C, N_{\text{opt}})\)</span>. This is where the scaling law appears: when <span class="math inline">\(a=0.49 \approx 0.5\)</span>, they obtain a very tight fit to the empirically calculated <span class="math inline">\(N_{\text{opt}}\)</span> values. This allows them to extrapolate the best model size (66B) for Chinchilla’s full run of <span class="math inline">\(5.76 \times 10^{23}\)</span> FLOPs, two orders of magnitude larger than the largest IsoFLOP curve of <span class="math inline">\(3\times10^{21}\)</span> FLOPs.</p>
+<div class="quarto-figure quarto-figure-center page-columns page-full">
+<figure class="figure page-columns page-full">
 <p><img src="assets/scaling.jpg" class="img-fluid figure-img" style="width:60.0%"></p>
+<figcaption class="figure-caption margin-caption">Figure 3 (center) from <span class="citation" data-cites="hoffmann2022training">Hoffmann et al. (<a href="#ref-hoffmann2022training" role="doc-biblioref">2022</a>)</span></figcaption>
 </figure>
 </div>
 <!-- Likewise, for each value of $N_{\text{opt}}$, we also have $D_{\text{opt}}$ for that value of $C$ (the number of tokens the "optimal model" for that compute budget was trained on). Fitting a similar power law, $D_{\text{opt}} = BC^b$, we obtain $b=0.51 \approx 0.5$. Extrapolating, we obtain the number of tokens the full run should use.
 
 ![](assets/datascaling.png){fig-align="center" width=55%} -->
-<p>Extrapolating two orders of magnitude in FLOPs is quite the jump, but as the paper then empirically validates, this “scaling law” extrapolation holds: Chinchilla 70B outperforms the prior, 4x larger Gopher model when using the same amount of compute (as the smaller model more effectively uses the 4x more tokens provided during training).</p>
-<section id="data-scaling" class="level3">
-<h3 class="anchored" data-anchor-id="data-scaling">Data Scaling</h3>
-<p>With scaling, the discussion usually centers on how to scale the <em>model size</em> w.r.t. increasing compute. This is because <span class="math inline">\(N\)</span> and <span class="math inline">\(D\)</span> are not independent: for a fixed <span class="math inline">\(C\)</span>, if you know <span class="math inline">\(N_{\text{opt}}\)</span> you also know <span class="math inline">\(D_{\text{opt}}\)</span><a href="#fn7" class="footnote-ref" id="fnref7" role="doc-noteref"><sup>7</sup></a>. Fitting a similar power law, <span class="math inline">\(D_{\text{opt}} = BC^b\)</span>, the authors obtain <span class="math inline">\(b=0.51 \approx 0.5\)</span><a href="#fn8" class="footnote-ref" id="fnref8" role="doc-noteref"><sup>8</sup></a>, which one should see as an alternate view of the same finding above!</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="assets/datascaling.png" class="img-fluid figure-img" style="width:55.0%"></p>
-</figure>
-</div>
-<p>Doing it this way, and noticing both <span class="math inline">\(a \approx 0.5\)</span> and <span class="math inline">\(b \approx 0.5\)</span> does make the 1:1 ratio between model size scaling and data scaling very clear.</p>
+<p>Extrapolating two orders of magnitude in FLOPs is quite the jump, but there’s an exact reason <span class="math inline">\(C=5.76 \times 10^{23}\)</span> is chosen for the full training run - the same amount of compute was used to train the preceding Gopher 280B (<span class="citation" data-cites="rae2022scaling">Rae et al. (<a href="#ref-rae2022scaling" role="doc-biblioref">2022</a>)</span>) model. According to the scaling laws calculated here, a compute optimal model for Gopher’s compute budget should be 4x smaller, trained on 4x more tokens.</p>
+<p>This prediction is tested empirically, and it holds, validating the scaling laws: Chinchilla 70B outperforms Gopher 280B on a suite of benchmarks, as detailed in Section 4.2 in the paper.</p>
 </section>
-<section id="generality" class="level3">
-<h3 class="anchored" data-anchor-id="generality">Generality</h3>
-<p>The analysis in the core body of the paper takes place using the MassiveText dataset, a proprietary dataset also used to train Gopher. To validate the generality of these findings on other datasets, Appendix C they reproduce this scaling behavior on two subsets of MassiveText, C4 (a public dataset first introduced in <span class="citation" data-cites="2020t5">Raffel et al. (<a href="#ref-2020t5" role="doc-biblioref">2020</a>)</span>) and GitHub code. In both, they find the proportionality constant <span class="math inline">\(a\)</span> linking <span class="math inline">\(C\)</span> and <span class="math inline">\(N_{\text{opt}}\)</span> to be <span class="math inline">\(\approx0.5\)</span>:</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="assets/tabled2.png" class="img-fluid figure-img" style="width:90.0%"></p>
+<section id="data-scaling" class="level3 page-columns page-full">
+<h3 class="anchored" data-anchor-id="data-scaling">Data Scaling</h3>
+<p>With scaling, the discussion usually centers on how to scale the <em>model size</em> w.r.t. increasing compute. This is because <span class="math inline">\(N\)</span> and <span class="math inline">\(D\)</span> are not independent: for a fixed <span class="math inline">\(C\)</span>, if you know <span class="math inline">\(N_{\text{opt}}\)</span> you also know <span class="math inline">\(D_{\text{opt}}\)</span><a href="#fn8" class="footnote-ref" id="fnref8" role="doc-noteref"><sup>8</sup></a>. Fitting a similar power law, <span class="math inline">\(D_{\text{opt}} = BC^b\)</span>, the authors obtain <span class="math inline">\(b=0.51 \approx 0.5\)</span><a href="#fn9" class="footnote-ref" id="fnref9" role="doc-noteref"><sup>9</sup></a>, which one should see as an alternate view of the same finding above!</p>
+<div class="quarto-figure quarto-figure-center page-columns page-full">
+<figure class="figure page-columns page-full">
+<p><img src="assets/datascaling.png" class="img-fluid figure-img" style="width:55.0%"></p>
+<figcaption class="figure-caption margin-caption">Figure 3 (right) from <span class="citation" data-cites="hoffmann2022training">Hoffmann et al. (<a href="#ref-hoffmann2022training" role="doc-biblioref">2022</a>)</span></figcaption>
 </figure>
 </div>
+<p>Doing it this way, and noticing both <span class="math inline">\(a \approx 0.5\)</span> and <span class="math inline">\(b \approx 0.5\)</span> does make the 1:1 ratio between model size scaling and data scaling clear.</p>
+</section>
+<section id="generality" class="level3 page-columns page-full">
+<h3 class="anchored" data-anchor-id="generality">Generality</h3>
+<p>The analysis in the core body of the paper takes place using the MassiveText dataset, a proprietary dataset also used to train Gopher. To validate the generality of these findings on other datasets, in Appendix C they reproduce this scaling behavior on two subsets of MassiveText, C4 (a public dataset first introduced in <span class="citation" data-cites="2020t5">Raffel et al. (<a href="#ref-2020t5" role="doc-biblioref">2020</a>)</span>) and GitHub code with 4 values of <span class="math inline">\(C\)</span>. In both, they find the constant <span class="math inline">\(a\)</span> linking <span class="math inline">\(C\)</span> and <span class="math inline">\(N_{\text{opt}}\)</span> to be <span class="math inline">\(\approx 0.5\)</span>:</p>
+<div class="quarto-figure quarto-figure-center page-columns page-full">
+<figure class="figure page-columns page-full">
+<p><img src="assets/tabled2.png" class="img-fluid figure-img" style="width:90.0%"></p>
+<figcaption class="figure-caption margin-caption">Table A2 from <span class="citation" data-cites="hoffmann2022training">Hoffmann et al. (<a href="#ref-hoffmann2022training" role="doc-biblioref">2022</a>)</span></figcaption>
+</figure>
+</div>
+<p>It is important to note that these estimates are not highly precise: the power-law is fitted on only 9 values of <span class="math inline">\(C\)</span> in the main experiments<a href="#fn10" class="footnote-ref" id="fnref10" role="doc-noteref"><sup>10</sup></a> (and only 4 values of <span class="math inline">\(C\)</span> for the GitHub/C4 experiments in Appendix C). The 80% confidence intervals for <span class="math inline">\(a\)</span> using the IsoFLOP approach is <span class="math inline">\((0.462, 0.534)\)</span>, which is still rather wide! Moreover, while a power law fit works well, we don’t know if the “true” functional form between <span class="math inline">\(C\)</span> and <span class="math inline">\(N_{\text{opt}}\)</span> <em>is</em> a power law<a href="#fn11" class="footnote-ref" id="fnref11" role="doc-noteref"><sup>11</sup></a>.</p>
+<p>Yet, despite not being highly precise, the 1:1 scaling suggested by the results do outperform the previous 3:1 scaling - Chinchilla 70B is 4x smaller than Gopher 280B, but trained on 4x more data it outperforms the larger model, highlighting the importance of data. That the measurements of <span class="math inline">\(a\)</span> and <span class="math inline">\(b\)</span> replicates across three approaches (Section 3), and that the IsoFLOP approach replicates on two more datasets (C4 and GitHub, producing estimates of <span class="math inline">\(a\)</span> and <span class="math inline">\(b\)</span> that are each closer to <span class="math inline">\((0.5, 0.5)\)</span> than <span class="math inline">\((0.73, 0.27)\)</span>) provide further support that 1:1 scaling is an improvement generally.</p>
 <section id="quadratic-compute" class="level4">
 <h4 class="anchored" data-anchor-id="quadratic-compute">Quadratic Compute</h4>
-<p>One intuitive (and important) conclusion from the 1:1 scaling of model size and data means, if you want a model that’s 2x large, you need to train it on 2x many tokens. And since FLOPs count is the product of both, this means you need 4x as much compute!</p>
+<p>One intuitive (and important) conclusion from the 1:1 scaling of model size and data means, if you want a compute optimal model that’s 2x large, you need to train it on 2x many tokens. And since FLOPs count is the product of both, this means you need 4x as much compute!</p>
 <p>Continuing that reasoning, if you want a model 5x larger, you need 25x as much compute, and so on! <span class="math inline">\(N_{\text{opt}} \propto C^{0.5}\)</span> rewritten differently is <span class="math inline">\(C \propto N_{\text{opt}}^2\)</span>, that is you need to scale compute <em>quadratically</em> with model size. This is enormously expensive, and is the core reason model sizes peaked around early-2022 (pre-Chinchilla): we’re only just now doing training runs with <span class="math inline">\(C\)</span> large enough that models of that size (500B+) are <em>compute optimal</em>, and future model size scaling will remain slower (compared to pre-Chinchilla) because of this quadratic factor.</p>
 </section>
 </section>
 </section>
 <section id="chinchilla-in-practice" class="level2 page-columns page-full">
 <h2 class="anchored" data-anchor-id="chinchilla-in-practice">Chinchilla in practice</h2>
-<p>Chinchilla, again, was a highly impactful paper that revealed just how wasteful training runs up till that point have been (see <span class="citation" data-cites="Timbers_2023">Timbers (<a href="#ref-Timbers_2023" role="doc-biblioref">2023</a>)</span> for historical overview). Its message is memorable and concise: scale data with model size in a 1:1 ratio.</p>
-<p>This message does need to be interpreted with nuance! For instance, the paper comes with this table calculating the optimal number of params and tokens across a range of FLOPs values (Appendix D3):</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
+<p>Chinchilla, again, was an impactful paper that revealed just how wasteful training runs up till that point have been (see <span class="citation" data-cites="Timbers_2023">Timbers (<a href="#ref-Timbers_2023" role="doc-biblioref">2023</a>)</span> for historical overview). Its message is memorable and concise: scale data with model size in a 1:1 ratio.</p>
+<p>This message does need to be interpreted with nuance! For instance, the paper comes with this table calculating the optimal number of params and tokens across a range of FLOPs values:</p>
+<div class="quarto-figure quarto-figure-center page-columns page-full">
+<figure class="figure page-columns page-full">
 <p><img src="assets/tablem2.png" class="img-fluid figure-img" style="width:45.0%"></p>
+<figcaption class="figure-caption margin-caption">Table A3 from <span class="citation" data-cites="hoffmann2022training">Hoffmann et al. (<a href="#ref-hoffmann2022training" role="doc-biblioref">2022</a>)</span></figcaption>
 </figure>
 </div>
-<p>But strictly speaking, this is only optimal for the exact dataset used to compute the coefficients of the scaling law, that is, <span class="math inline">\(N_{\text{opt}}=AC^a\)</span> and <span class="math inline">\(D_{\text{opt}}=BC^b\)</span>. The argument Chinchilla makes is that <span class="math inline">\(a \approx 0.5\)</span> and <span class="math inline">\(b \approx 0.5\)</span>; it does not make any claims as to what <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span> generally are, and they can vary from dataset to dataset!</p>
+<p>But strictly speaking, this is only optimal for the exact dataset + model architecture used to compute the coefficients of the scaling law, that is, <span class="math inline">\(N_{\text{opt}}=AC^a\)</span> and <span class="math inline">\(D_{\text{opt}}=BC^b\)</span>. The argument Chinchilla makes is that <span class="math inline">\(a \approx 0.5\)</span> and <span class="math inline">\(b \approx 0.5\)</span> generally, <em>across</em> datasets; it does not make any claims as to what general values of <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span> are, and they can vary from dataset to dataset!</p>
 <p>For instance, the final Chinchilla 70B model is trained on 1.4T tokens. If we had an aggressively deduplicated version of the MassiveText dataset (such as <span class="citation" data-cites="abbas2023semdedup">(<a href="#ref-abbas2023semdedup" role="doc-biblioref">Abbas et al., 2023</a>)</span>), it is possible to have a scaling law experiment that yields 1.0T tokens as optimal, while also staying consistent with <span class="math inline">\(b \approx 0.5\)</span>, producing a plot that looks like the following:</p>
 <div class="quarto-figure quarto-figure-center page-columns page-full">
 <figure class="figure page-columns page-full">
@@ -308,29 +334,27 @@ div.csl-indent {
 <figcaption class="figure-caption margin-caption">Notice that the slopes are the same (that is, <span class="math inline">\(b =0.5\)</span>) but the <em>intercepts</em> <span class="math inline">\(B\)</span> are different</figcaption>
 </figure>
 </div>
-<p>To interpret this, remember that the scaling law is fitted as <span class="math inline">\(D_{\text{opt}} = BC^b\)</span>. On a log-log plot, <span class="math inline">\(B\)</span> acts as the intercept, while <span class="math inline">\(b\)</span> is the slope. Chinchilla makes claims about the slope: that <span class="math inline">\(b \approx 0.5\)</span> (and <span class="math inline">\(a \approx 0.5\)</span> on the model size side). This means <em>once</em> you’ve already found a value <span class="math inline">\((N_{\text{opt}}, D_{\text{opt}})\)</span> at a small value of <span class="math inline">\(C\)</span>, Chinchilla provides you the recipe to scale up your <span class="math inline">\(N\)</span> on more tokens <span class="math inline">\(D\)</span> from that exact data mixture.</p>
+<p>To interpret this, remember that the scaling law is fitted as <span class="math inline">\(D_{\text{opt}} = BC^b\)</span>. On a log-log plot, <span class="math inline">\(B\)</span> acts as the intercept, while <span class="math inline">\(b\)</span> is the slope. <strong>Chinchilla makes claims about the slope:</strong> that <span class="math inline">\(b \approx 0.5\)</span> (and <span class="math inline">\(a \approx 0.5\)</span> on the model size side). This means <em>once</em> you’ve already found a value <span class="math inline">\((N_{\text{opt}}, D_{\text{opt}})\)</span> at a small value of <span class="math inline">\(C\)</span>, Chinchilla provides you the recipe to scale up your <span class="math inline">\(N\)</span> on more tokens <span class="math inline">\(D\)</span> from that exact data mixture.</p>
 <p>But even a single <span class="math inline">\((N_{\text{opt}}, D_{\text{opt}})\)</span> pair will be unknown to you for your exact data/architecture setup at the start of your experiments, so at the minimum you’ll want to perform ~3-5 small training runs to produce one IsoFLOP curve, to produce at least one <span class="math inline">\((N_{\text{opt}}, D_{\text{opt}})\)</span> you can extrapolate from.</p>
-<p>Subsequent work (such as <span class="citation" data-cites="dey2023cerebrasgpt">Dey et al. (<a href="#ref-dey2023cerebrasgpt" role="doc-biblioref">2023</a>)</span>, Appendix D) replicated MassiveText-like dynamics in <span class="math inline">\(a, b\)</span><a href="#fn9" class="footnote-ref" id="fnref9" role="doc-noteref"><sup>9</sup></a> <em>and</em> in <span class="math inline">\(A, B\)</span> (finding ~20 tokens per parameter to be optimal) on a different dataset, the Pile <span class="citation" data-cites="gao2020pile">(<a href="#ref-gao2020pile" role="doc-biblioref">Gao et al., 2020</a>)</span>. This suggests a general rule of thumb (20 tokens/param) for decoder-only, natural language models<a href="#fn10" class="footnote-ref" id="fnref10" role="doc-noteref"><sup>10</sup></a>, that have been recommended in other blogposts (such as <span class="citation" data-cites="transformer-math-eleutherai">Anthony et al. (<a href="#ref-transformer-math-eleutherai" role="doc-biblioref">2023</a>)</span>).</p>
-<p>That said, it is important to recall the assumptions this rule-of-thumb is built on<a href="#fn11" class="footnote-ref" id="fnref11" role="doc-noteref"><sup>11</sup></a>, and to be willing to calculate a new IsoFLOP curve if any assumption is violated.</p>
-<section id="about-loss" class="level3 page-columns page-full">
-<h3 class="anchored" data-anchor-id="about-loss">About Loss</h3>
-<div class="page-columns page-full"><p>Chinchilla is concerned exclusively with minimizing loss on a validation set: it makes no direct claims about the actual capabilities of a model. With language models, the loss used most commonly is perplexity <span class="citation" data-cites="chip2019evaluation">(<a href="#ref-chip2019evaluation" role="doc-biblioref">Huyen, 2019</a>)</span>. But perplexity only <em>correlates with</em> the behaviors we want; it itself is not the objective we care about.</p><div class="no-row-height column-margin column-container"><span class="">Intuitively, perplexity measures between how many “options” in its vocabulary, on average, a language model is “choosing between” when generating the next token (lower is better).</span></div></div>
-<p>This can lead to counterintuitive behaviors: for instance in the PaLM2 report <span class="citation" data-cites="anil2023palm">(<a href="#ref-anil2023palm" role="doc-biblioref">Anil et al., 2023</a>)</span>, although a 9.5B model achieves a lower loss on <span class="math inline">\(C = 1 \times 10^{22}\)</span> FLOPs, a 16.1B model trained with the same amount of compute (but higher loss) actually performs better on downstream evaluations.</p>
-<p>It is always critical to remember that language modeling is a proxy objective for natural language understanding (NLU) capabilities. We’re still subject to Goodharting <span class="citation" data-cites="sohldickstein20221106">(<a href="#ref-sohldickstein20221106" role="doc-biblioref">Sohl-Dickstein, 2022</a>)</span> on whether this proxy objective (perplexity) optimizes for what we really want!</p>
-</section>
-<section id="inference-costs" class="level3 page-columns page-full">
-<h3 class="anchored" data-anchor-id="inference-costs">Inference Costs</h3>
-<p>This is a nice chance to circle back to the core of this blog post: what does it mean to be compute optimal? Again, in the scaling law literature, it’s finding the <span class="math inline">\(N\)</span> and <span class="math inline">\(D\)</span> that will produce the smallest validation loss under a fixed training cost <span class="math inline">\(C\)</span>. But in industry applications, much of the cost will be in <em>inference</em>, serving the model.</p>
-<p>Since transformer inference cost is linear in model size, a model that’s 3x smaller will take 3x less FLOPs for inference<a href="#fn12" class="footnote-ref" id="fnref12" role="doc-noteref"><sup>12</sup></a>. Suppose the compute optimal model for an initial <span class="math inline">\(2.66\times 10^{21}\)</span> FLOPs budget is <span class="math inline">\(N=2.8\text{B}\)</span> params trained on <span class="math inline">\(D=156\text{B}\)</span> tokens. We can always train a 1.5B parameter model for <em>longer</em> than compute-optimal to achieve the same performance<a href="#fn13" class="footnote-ref" id="fnref13" role="doc-noteref"><sup>13</sup></a> as the 2.8B model. This “extra compute” we call the compute overhead. Just how large is it?</p>
+<p>Subsequent work (such as <span class="citation" data-cites="dey2023cerebrasgpt">Dey et al. (<a href="#ref-dey2023cerebrasgpt" role="doc-biblioref">2023</a>)</span>, Appendix D) replicated MassiveText-like dynamics in <span class="math inline">\(a, b\)</span><a href="#fn12" class="footnote-ref" id="fnref12" role="doc-noteref"><sup>12</sup></a> <em>and</em> in <span class="math inline">\(A, B\)</span> (finding ~20 tokens per parameter to be optimal) on a different dataset, the Pile <span class="citation" data-cites="gao2020pile">(<a href="#ref-gao2020pile" role="doc-biblioref">Gao et al., 2020</a>)</span>. This suggests a general rule of thumb (20 tokens/param) for decoder-only, natural language models<a href="#fn13" class="footnote-ref" id="fnref13" role="doc-noteref"><sup>13</sup></a>, that have been recommended in other blogposts (such as <span class="citation" data-cites="transformer-math-eleutherai">Anthony et al. (<a href="#ref-transformer-math-eleutherai" role="doc-biblioref">2023</a>)</span>).</p>
+<p>That said, it is important to recall the assumptions this rule-of-thumb is built on<a href="#fn14" class="footnote-ref" id="fnref14" role="doc-noteref"><sup>14</sup></a>, and to be willing to calculate a new IsoFLOP curve if any assumption is violated.</p>
+<section id="compute-optimal" class="level3 page-columns page-full">
+<h3 class="anchored" data-anchor-id="compute-optimal">Compute optimal?</h3>
+<p>Chinchilla’s scaling laws are concerned with optimality under <em>one</em> definition of cost: the amount of FLOPs used in training. This translates to real world, <em>monetary</em> cost only if you’re paying per-unit of compute. In practice, if you’re a big lab, you likely already have a contract reserving accelerator capacity with one of the large cloud providers; the compute is already <em>paid for</em>, and the real cost is <em>opportunity</em>.</p>
+<p>Chinchilla only tells you how to produce the “best” (lowest validation loss) model given a compute budget; the meta-calculus of how valuable each model <em>is</em><a href="#fn15" class="footnote-ref" id="fnref15" role="doc-noteref"><sup>15</sup></a>, is an entirely other (and very real!) concern that it cannot answer. Moreover, there are practical instances where you may want to “overtrain” a smaller model with more data (= higher training costs), so that it is easier to serve to end users, as we see next.</p>
+<section id="inference-costs" class="level4 page-columns page-full">
+<h4 class="anchored" data-anchor-id="inference-costs">Inference Costs</h4>
+<p>In industry applications, much of the cost will often not be in <em>training</em>, but in <em>inference</em>, serving the model to end users.</p>
+<p>Since transformer inference cost is linear in model size, a model that’s 3x smaller will take 3x less FLOPs for inference<a href="#fn16" class="footnote-ref" id="fnref16" role="doc-noteref"><sup>16</sup></a>. Suppose the compute optimal model for an initial <span class="math inline">\(2.66\times 10^{21}\)</span> FLOPs budget is <span class="math inline">\(N=2.8\text{B}\)</span> params trained on <span class="math inline">\(D=156\text{B}\)</span> tokens. We can always train a 1.5B parameter model for <em>longer</em> than compute-optimal to achieve the same performance<a href="#fn17" class="footnote-ref" id="fnref17" role="doc-noteref"><sup>17</sup></a> as the 2.8B model. This “extra compute” we call the compute overhead. Just how large is it?</p>
 <div class="page-columns page-full"><p>Chinchilla’s scaling laws also give us a way to quantify this! Instead of looking at IsoFLOP curves (where the FLOP is the quantity held constant on each curve) we can look at IsoLoss curves (where the loss is the quantity held constant on each curve).  This specific <span class="math inline">\(N\)</span> and <span class="math inline">\(D\)</span> produce a loss of 2.24; we can produce a full range of <span class="math inline">\((N, D)\)</span> values with that same loss, as shown on the left.</p><div class="no-row-height column-margin column-container"><span class="">For this analysis, we use the formula in equation 10, appendix D.3, which is <span class="math inline">\(L(N, D) = 1.69 + \frac{406.4}{N^{0.34}} + \frac{410.7}{N^{0.28}}\)</span></span></div></div>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="assets/isoloss.svg" class="img-fluid figure-img" style="width:100.0%"></p>
 </figure>
 </div>
-<p>We can also plot the IsoLoss curve for a loss of 2.24, as on the right. As we see, the “cheapest” way to achieve that loss is through the compute optimal 2.8B model (gold star). But we can also produce a model nearly half the size (1.5B, green star) if we’re willing to spend <span class="math inline">\(3.09\times 10^{21}\)</span>, or 16% more instead. When is this worth it?</p>
-<section id="payoff" class="level4">
-<h4 class="anchored" data-anchor-id="payoff">Payoff</h4>
+<div class="page-columns page-full"><p>We can also plot the IsoLoss curve for a loss of 2.24, as on the right. As we see, the “cheapest” way to achieve that loss is through the compute optimal 2.8B model (gold star).  But we can also produce a model nearly half the size (1.5B, green star) if we’re willing to spend <span class="math inline">\(3.09\times 10^{21}\)</span>, or 16% more instead. When is this worth it?</p><div class="no-row-height column-margin column-container"><span class="">Heads up: we’re talking exclusively about how to produce a smaller model with the same validation loss. But as we’ll see next, loss is not the same as downstream performance!</span></div></div>
+<section id="payoff" class="level5">
+<h5 class="anchored" data-anchor-id="payoff">Payoff</h5>
 <p>Short answer: calculate the minimum number of tokens that, when inferred using the 1.5B “overtrained” vs 2.8B “optimal” model, will have saved us more in inference than the excess spent in training. Then:</p>
 <p><span class="math display">\[
 \begin{align*}
@@ -343,19 +367,37 @@ D_{\text{inf}} &amp;= \text{140B}\\
 \]</span></p>
 <p>That is, if we’re serving more than 140B tokens, the cost savings from this ~45% smaller model will become worth it. There’s a couple things to note here:</p>
 <ul>
-<li>The <em>inference</em> cost of <span class="math inline">\(D_{\text{inf}}\)</span> tokens passed through a model of size <span class="math inline">\(N\)</span> is <span class="math inline">\(\approx 2ND_{\text{inf}}\)</span>, not <span class="math inline">\(\approx 6ND_{\text{inf}}\)</span>. This is because we only need the costs for the forward pass, <em>not</em> the backward pass (which is 2x more than the forward pass).</li>
-<li>This also means <em>every</em> training token is 3x more expensive than every inference token; in other words, we need to pass in 3 inference tokens for every extra training token for the cost to be worth it. Put more directly, overtraining only makes sense for models that will receive very high usage.</li>
+<li>The <em>inference</em> cost of <span class="math inline">\(D_{\text{inf}}\)</span> tokens passed through a model of size <span class="math inline">\(N\)</span> is <span class="math inline">\(\approx 2ND_{\text{inf}}\)</span>, not <span class="math inline">\(\approx 6ND_{\text{inf}}\)</span>. This is because we only need the costs for the forward pass, <em>not</em> the forward + backward pass (where the backward pass is 2x more than the forward pass).</li>
+<li>This also means every training token is 3x more expensive than every inference token; we need to pass in at least 3 inference tokens for every extra training token for the cost to be worth it. Put more directly, overtraining only makes sense for models that will receive very high usage.</li>
 <li>To put the 140B inference tokens into context, the number of training tokens <span class="math inline">\(D\)</span> needed for a model of size 1.5B to achieve a loss of 2.24 (based on the loss formula above) is <span class="math inline">\(\approx \text{339B}\)</span>. This means we’ll only need to serve a fraction of the tokens needed to train the model for the compute overhead to be worth it.</li>
 </ul>
-<p>Generally speaking, for models intended to be used in production, a compute overhead of upto ~100% will often be worth paying to obtain a model ~1/3rd the size. <span class="citation" data-cites="devries2023chinchilla_analysis">De Vries (<a href="#ref-devries2023chinchilla_analysis" role="doc-biblioref">2023</a>)</span> goes into more depth on this for those interested.</p>
+<p>Generally speaking, for models intended to be used in production, a compute overhead of upto ~100% will often be worth paying to obtain a model ~30% the size (see <span class="citation" data-cites="devries2023chinchilla_analysis">De Vries (<a href="#ref-devries2023chinchilla_analysis" role="doc-biblioref">2023</a>)</span> for this analysis).</p>
 </section>
+</section>
+<section id="latency" class="level4">
+<h4 class="anchored" data-anchor-id="latency">Latency</h4>
+<p>Compute isn’t the only factor at play at inference time: latency is too! A model that’s 50% the size not only uses 50% the compute, but could also reduce the computation time by upto 50%<a href="#fn18" class="footnote-ref" id="fnref18" role="doc-noteref"><sup>18</sup></a>. If that is the difference between your user waiting for the output vs.&nbsp;your service being not viable, that is a constraint that needs to take priority over training a compute-optimal model.</p>
+<p>Moreover, Chinchilla’s scaling laws tell you that you can <em>optimally</em> use an increased compute budget by scaling your model size and data 1:1, but you can <em>ignore</em> it and just increase data, keeping the model size fixed. If there <em>is</em> an upper bound to the size of your model (due to latency considerations or otherwise), you can <em>always</em> improve performance (subject to diminishing returns) by training on more tokens.</p>
+<p>This, combined with trillion-token datasets and the ability to reuse data for upto 4 epochs <span class="citation" data-cites="muennighoff2023scaling">(<a href="#ref-muennighoff2023scaling" role="doc-biblioref">Muennighoff et al., 2023</a>)</span> means sub-100B parameter models (and likely even larger) are not data constrained during pre-training, and can be trained <em>far</em> past compute-optimal (as is the case with model families such as LLama 2 <span class="citation" data-cites="touvron2023llama">(<a href="#ref-touvron2023llama" role="doc-biblioref">Touvron et al., 2023</a>)</span>) for maximal performance under compute/latency constrained inference.</p>
+</section>
+</section>
+<section id="loss-neq-performance" class="level3 page-columns page-full">
+<h3 class="anchored" data-anchor-id="loss-neq-performance">Loss <span class="math inline">\(\neq\)</span> Performance</h3>
+<div class="page-columns page-full"><p>One last thing to note is that Chinchilla is concerned exclusively with minimizing loss on a validation set: it makes no direct claims about the actual capabilities of a model. With language models, the loss used most commonly is perplexity <span class="citation" data-cites="chip2019evaluation">(<a href="#ref-chip2019evaluation" role="doc-biblioref">Huyen, 2019</a>)</span>. But perplexity only <em>correlates with</em> the behaviors we want; it itself is not the objective we care about.</p><div class="no-row-height column-margin column-container"><span class="">Intuitively, perplexity measures between how many “options” in its vocabulary, on average, a language model is “choosing between” when generating the next token (lower is better).</span></div></div>
+<p>This can lead to counterintuitive behaviors: for instance in the PaLM2 report <span class="citation" data-cites="anil2023palm">(<a href="#ref-anil2023palm" role="doc-biblioref">Anil et al., 2023</a>)</span>, although a 9.5B model achieves a lower loss on <span class="math inline">\(C = 1 \times 10^{22}\)</span> FLOPs, a 16.1B model trained with the same amount of compute (but higher loss) actually performs better on downstream evaluations.</p>
+<p>It is always critical to remember that language modeling is a proxy objective for natural language understanding (NLU) capabilities. We’re still subject to Goodharting <span class="citation" data-cites="sohldickstein20221106">(<a href="#ref-sohldickstein20221106" role="doc-biblioref">Sohl-Dickstein, 2022</a>)</span> on whether this proxy objective (perplexity) optimizes for what we really want!</p>
 </section>
 </section>
 <section id="conclusion" class="level2">
 <h2 class="anchored" data-anchor-id="conclusion">Conclusion</h2>
-<p>Chinchilla is more than just training compute optimal models: it’s being able to make quantifiable tradeoffs between cost, model size and dataset size. Understanding the scaling laws as derived not only helps us better understand the assumptions made, but also enables us to recalculate them given a substantial change in dataset, model architecture, or domain.</p>
+<p>Understanding Chinchilla’s scaling laws as derived not only helps us better understand the assumptions made, but also enables us to recalculate them given a substantial change in dataset, model architecture, or domain. Moreover, understanding Chinchilla’s definition of a compute-optimal model helps us decide when we might <em>not</em> want one, and might want to overtrain a smaller model instead.</p>
+<p>Overall, Chinchilla is much more than just training compute optimal models: it’s being able to make <em>quantifiable</em> tradeoffs between cost, model size and dataset size.</p>
+<section id="acknowledgements" class="level3">
+<h3 class="anchored" data-anchor-id="acknowledgements">Acknowledgements</h3>
+<p>Deeply grateful to Jack Rae, Erich Elsen and Klara Kaleb for providing feedback on early drafts of this blogpost; it is substantially clearer and more comprehensive owing to their thoughtful recommendations. Much thanks also to Garrett Honke and Jon Deaton, with whom my many (many) conversations about language models have helped shape my own understanding. All errors are definitely my own!</p>
 </section>
-<section id="appendix-a-pre-chinchilla-scaling" class="level2">
+</section>
+<section id="appendix-a-pre-chinchilla-scaling" class="level2 page-columns page-full">
 <h2 class="anchored" data-anchor-id="appendix-a-pre-chinchilla-scaling">Appendix A: Pre-Chinchilla Scaling</h2>
 <p><span class="citation" data-cites="kaplan2020scaling">Kaplan et al. (<a href="#ref-kaplan2020scaling" role="doc-biblioref">2020</a>)</span> had first established scaling law behaviors in large, neural language models two years prior to Chinchilla. This was an expansive work, covering many results that are very much worth learning about, such as:</p>
 <ul>
@@ -365,19 +407,39 @@ D_{\text{inf}} &amp;= \text{140B}\\
 <li>Early work observing additional compute can be traded off for smaller model sizes (Figure 12).</li>
 <li>Observing a conspicuous lump at <span class="math inline">\(10^{-5}\)</span> PF-days at the transition between 1-layer to 2-layer networks (Figure 13), which subsequent work from <span class="citation" data-cites="olsson2022context">Olsson et al. (<a href="#ref-olsson2022context" role="doc-biblioref">2022</a>)</span> attributed to the formation of induction heads (which one-layer attention networks cannot form).</li>
 </ul>
-<p>This work also fitted scaling laws between compute <span class="math inline">\(C\)</span>, and model size <span class="math inline">\(N\)</span> and number of tokens <span class="math inline">\(D\)</span>. However, the estimates in this paper were <span class="math inline">\(a \approx 0.73\)</span> and <span class="math inline">\(b \approx 0.27\)</span>; that is, <span class="math inline">\(N\)</span> needed to be scaled up ~3x faster than <span class="math inline">\(D\)</span>, as they summarized in Figure 3:</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
+<p>This work also fitted scaling laws between compute <span class="math inline">\(C\)</span>, and model size <span class="math inline">\(N\)</span> and number of tokens <span class="math inline">\(D\)</span>. However, the estimates in this paper were <span class="math inline">\(a \approx 0.73\)</span> and <span class="math inline">\(b \approx 0.27\)</span>; that is, <span class="math inline">\(\log N\)</span> needed to be scaled up ~3x faster than <span class="math inline">\(\log D\)</span>:</p>
+<div class="quarto-figure quarto-figure-center page-columns page-full">
+<figure class="figure page-columns page-full">
 <p><img src="assets/scale.png" class="img-fluid figure-img" style="width:75.0%"></p>
+<figcaption class="figure-caption margin-caption">Figure 3 from <span class="citation" data-cites="kaplan2020scaling">Kaplan et al. (<a href="#ref-kaplan2020scaling" role="doc-biblioref">2020</a>)</span></figcaption>
 </figure>
 </div>
-<p>However, these estimates were derived from the “early-stopped” loss (and the authors explicitly state it as such). That is, if a 1B model was trained on 100B tokens, to estimate the loss of a 1B model trained on 50B tokens, they would use the intermediate loss (at 50B tokens processed) from the 100B run.</p>
-<p>As the Chinchilla authors subsequently pointed out, using the intermediate loss value from a longer run means the learning rate schedule has not fully decayed at that point (as that happens at the end of the run). As they show in Figure A1, using a schedule with an endpoint more than 25% beyond the measurement point<a href="#fn14" class="footnote-ref" id="fnref14" role="doc-noteref"><sup>14</sup></a> leads to clear increases in the measured loss.</p>
-<p>To correct for this, the authors train <em>seperate</em> models of the same model size <span class="math inline">\(N\)</span> for <em>each</em> value of <span class="math inline">\(D\)</span>, making sure that the learning rate schedule fully finishes decaying when <span class="math inline">\(D\)</span> tokens are processed. This corrected for the overestimated measured losses, yielding <span class="math inline">\(a \approx 0.5\)</span> and <span class="math inline">\(b \approx 0.5\)</span>, yielding the now familiar 1:1 scaling ratio.</p>
-
-
-
+<p>However, these estimates were derived from the “early-stopped” loss (and the authors explicitly state it as such). That is, if a 1B model was trained on 100B tokens, to estimate the loss of a 1B model trained on 50B tokens, they would use the intermediate loss (at 50B tokens processed) from the 100B tokens run.</p>
+<p>As the Chinchilla authors subsequently pointed out, using the intermediate loss value from a longer run means the learning rate schedule has not fully decayed at that point (as that happens at the end of the run). As they show in Figure A1, using a schedule with an endpoint more than 25% beyond the measurement point<a href="#fn19" class="footnote-ref" id="fnref19" role="doc-noteref"><sup>19</sup></a> leads to clear increases in the measured loss.</p>
+<p>To correct for this, the Chinchilla authors trained <em>seperate</em> models of the same model size <span class="math inline">\(N\)</span> for <em>each</em> value of <span class="math inline">\(D\)</span>, making sure that the learning rate schedule fully finishes decaying when <span class="math inline">\(D\)</span> tokens are processed. This corrected for the overestimated measured losses, yielding <span class="math inline">\(a \approx 0.5\)</span> and <span class="math inline">\(b \approx 0.5\)</span>, yielding the now familiar 1:1 scaling ratio.</p>
 </section>
+<section id="appendix-b-deriving-c-approx-6nd" class="level2 page-columns page-full">
+<h2 class="anchored" data-anchor-id="appendix-b-deriving-c-approx-6nd">Appendix B: Deriving <span class="math inline">\(C \approx 6ND\)</span></h2>
+<p>A sketch for the <span class="math inline">\(C \approx 6ND\)</span> approximation introduced in <span class="citation" data-cites="kaplan2020scaling">Kaplan et al. (<a href="#ref-kaplan2020scaling" role="doc-biblioref">2020</a>)</span> is as follows:</p>
+<ol type="1">
+<li>Where <span class="math inline">\(N\)</span> is the number of parameters, the total non-embedding FLOPs per token for the forward pass can be written out as<a href="#fn20" class="footnote-ref" id="fnref20" role="doc-noteref"><sup>20</sup></a>.</li>
+</ol>
+<p><span class="math display">\[\begin{align*}
+    C_{\text{forward}} &amp;\approx 2 \cdot 2d_\text{model}n_\text{layer}(2d_\text{attn} + d_\text{ff}) + 2n_{\text{layer}}n_{\text{ctx}}d_{\text{attn}}\\
+    &amp;= 2N + 2n_{\text{layer}}n_{\text{ctx}}d_{\text{attn}}
+\end{align*}\]</span></p>
+<ol start="2" type="1">
+<li><p><span class="math inline">\(C_{\text{forward}}\)</span> can be described as having two terms: the first corresponding to model size, and the second corresponding to how increasing the context side <span class="math inline">\(n_{\text{ctx}}\)</span> increases the number of FLOPs needed. For sufficiently large models with the context window sizes commonly used in training, <span class="math inline">\(2N\)</span> is ~2 orders of magnitude larger than <span class="math inline">\(2n_{\text{layer}}n_{\text{ctx}}d_{\text{attn}}\)</span>. This allows simplifying <span class="math inline">\(C_{\text{forward}}\)</span> to just the first term, <span class="math inline">\(C_{\text{forward}} \approx 2N\)</span> .</p></li>
+<li><p>Since this value is per token, for <span class="math inline">\(D\)</span> tokens this is <span class="math inline">\(C_{\text{forward}} \approx 2ND\)</span>.</p></li>
+<li><p>Now, the backward pass takes 2x as much compute as the forward pass. This is because, at each layer you need to compute the gradients for <em>both</em> the activations of the previous layer <em>and</em> the weights of that layer. Hence, <span class="math display">\[\begin{align*}
+C &amp;\approx 2ND + 4ND\\
+&amp;= 6ND
+\end{align*}\]</span></p></li>
+</ol>
+
+
+
+<div class="no-row-height column-margin column-container"><span class="">For instance, for GPT-3 175B (with <span class="math inline">\(n_{\text{layer}} = 96\)</span>, <span class="math inline">\(n_{\text{ctx}}=2048\)</span> and <span class="math inline">\(d_{\text{attn}}=12288\)</span>), about ~98% of <span class="math inline">\(C_{\text{forward}}\)</span> comes from the <span class="math inline">\(2N\)</span> term</span></div></section>
 
 
 <div id="quarto-appendix" class="default"><section class="quarto-appendix-contents" role="doc-bibliography"><h2 class="anchored quarto-appendix-heading">References</h2><div id="refs" class="references csl-bib-body hanging-indent" data-line-spacing="2" role="list">
@@ -414,6 +476,9 @@ Kaplan, J., McCandlish, S., Henighan, T., Brown, T. B., Chess, B., Child, R., Gr
 <div id="ref-mccandlish2018empirical" class="csl-entry" role="listitem">
 McCandlish, S., Kaplan, J., Amodei, D., &amp; Team, O. D. (2018). <em>An empirical model of large-batch training</em>. <a href="https://arxiv.org/abs/1812.06162">https://arxiv.org/abs/1812.06162</a>
 </div>
+<div id="ref-muennighoff2023scaling" class="csl-entry" role="listitem">
+Muennighoff, N., Rush, A. M., Barak, B., Scao, T. L., Piktus, A., Tazi, N., Pyysalo, S., Wolf, T., &amp; Raffel, C. (2023). <em>Scaling data-constrained language models</em>. <a href="https://arxiv.org/abs/2305.16264">https://arxiv.org/abs/2305.16264</a>
+</div>
 <div id="ref-olsson2022context" class="csl-entry" role="listitem">
 Olsson, C., Elhage, N., Nanda, N., Joseph, N., DasSarma, N., Henighan, T., Mann, B., Askell, A., Bai, Y., Chen, A., Conerly, T., Drain, D., Ganguli, D., Hatfield-Dodds, Z., Hernandez, D., Johnston, S., Jones, A., Kernion, J., Lovitt, L., … Olah, C. (2022). In-context learning and induction heads. <em>Transformer Circuits Thread</em>.
 </div>
@@ -432,34 +497,42 @@ Sohl-Dickstein, J. (2022).<em><span class="nocase">Too much efficiency makes eve
 <div id="ref-Timbers_2023" class="csl-entry" role="listitem">
 Timbers, F. (2023). Five years of progress in GPTs. In <em>Five years of progress in GPTs - by Finbarr Timbers</em>. Artificial Fintelligence. <a href="https://finbarrtimbers.substack.com/p/five-years-of-progress-in-gpts">https://finbarrtimbers.substack.com/p/five-years-of-progress-in-gpts</a>
 </div>
+<div id="ref-touvron2023llama" class="csl-entry" role="listitem">
+Touvron, H., Martin, L., Stone, K., Albert, P., Almahairi, A., Babaei, Y., Bashlykov, N., Batra, S., Bhargava, P., Bhosale, S., Bikel, D., Blecher, L., Ferrer, C. C., Chen, M., Cucurull, G., Esiobu, D., Fernandes, J., Fu, J., Fu, W., … Scialom, T. (2023). <em>Llama 2: Open foundation and fine-tuned chat models</em>. <a href="https://arxiv.org/abs/2307.09288">https://arxiv.org/abs/2307.09288</a>
+</div>
 </div></section><section id="footnotes" class="footnotes footnotes-end-of-document" role="doc-endnotes"><h2 class="anchored quarto-appendix-heading">Footnotes</h2>
 
 <ol>
-<li id="fn1"><p>Said differently, for the total compute available to the teams then, they could’ve obtained a lower validation loss with a smaller model trained on more data.<a href="#fnref1" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
-<li id="fn2"><p>FLoating point OPerations, basically a measure of the number of operations on individual floating point numbers a larger process (such as a matrix multiply) requires.<a href="#fnref2" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
-<li id="fn3"><p><span class="citation" data-cites="chowdhery2022palm">Chowdhery et al. (<a href="#ref-chowdhery2022palm" role="doc-biblioref">2022</a>)</span> first introduced this, and this can be quickly calculated by running your job on the cluster for a few minutes (vs days/weeks for the full run).<a href="#fnref3" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
-<li id="fn4"><p>Again, you can always double the model size and use the same number of tokens as before, but you now need 2x the compute! Chinchilla’s analyses are about how to maximally use a <em>fixed</em> amount of compute.<a href="#fnref4" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
-<li id="fn5"><p>The Chinchilla paper uses a more precise means to calculate the FLOPs than the C=6ND approximation, which the authors explain in Appendix F. The C=6ND approximation is within 5% across two orders of magnitude, so it’s still a good mental model!<a href="#fnref5" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
-<li id="fn6"><p>In that the FLOPs (<span class="math inline">\(C\)</span>) is the quantity being held constant for each point on this curve.<a href="#fnref6" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
-<li id="fn7"><p>Intuitively, if you know the size of the model, and amount of compute used to train it, you can quickly reverse calculate how many tokens the model would need to be “trained on” to hit that compute budget.<a href="#fnref7" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
-<li id="fn8"><p>The actual 80% confidence intervals for <span class="math inline">\(a\)</span> is <span class="math inline">\((0.462,0.534)\)</span>, so it’s not unreasonable to round it to 0.5 for simplicity.<a href="#fnref8" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
-<li id="fn9"><p>1:1 data:model scaling, as expected<a href="#fnref9" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
-<li id="fn10"><p>without needing to produce IsoFLOPs curves for each new dataset<a href="#fnref10" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
-<li id="fn11"><p>That the model is decoder-only, natural language, with a mixture similar to MassiveText.<a href="#fnref11" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
-<li id="fn12"><p>And hence, properly optimized at scale, will be 3x cheaper.<a href="#fnref12" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
-<li id="fn13"><p>that is, the same validation loss<a href="#fnref13" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
-<li id="fn14"><p>In other words, a schedule that has not fully decayed at the measurement point.<a href="#fnref14" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn1"><p>That is, <span class="math inline">\(\log N = 2.7\log D + K\)</span>, where K is some constant. Equivalently, <span class="math inline">\(N \propto D^{2.7}\)</span>. In concrete terms, for every 2.7 orders of magnitude increase in model size <span class="math inline">\(N\)</span>, we only need to increase dataset size <span class="math inline">\(D\)</span> by one order of magnitude.<a href="#fnref1" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn2"><p>That is, they needed to be trained on much more data for that size to be compute optimal.<a href="#fnref2" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn3"><p>Said differently, for the total compute available to the teams then, they could’ve obtained a lower validation loss with a smaller model trained on more data.<a href="#fnref3" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn4"><p>FLOPs/sec is often written as FLOPS (with a capital S for second), but this can be confusing, so I write it out explicitly here.<a href="#fnref4" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn5"><p>In more depth, this is the FLOPs/sec used towards the computation of the training job itself (disregarding any re-computations such as <a href="https://fairscale.readthedocs.io/en/latest/deep_dive/activation_checkpointing.html">activation checkpointing</a>) divided by the peak FLOPs/sec of the hardware. <span class="citation" data-cites="chowdhery2022palm">Chowdhery et al. (<a href="#ref-chowdhery2022palm" role="doc-biblioref">2022</a>)</span> first introduced this, and this can be quickly calculated by running your job on the cluster for a few minutes (vs days/weeks for the full run).<a href="#fnref5" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn6"><p>Again, you can always double the model size and use the same number of tokens as before, but you now need 2x the compute! Chinchilla’s analyses are about how to maximally use a <em>fixed</em> amount of compute.<a href="#fnref6" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn7"><p>In that the FLOPs (<span class="math inline">\(C\)</span>) is the quantity being held constant for each point on this curve.<a href="#fnref7" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn8"><p>Intuitively, if you know the size of the model, and amount of compute used to train it, you can quickly reverse calculate how many tokens the model would need to be “trained on” to hit that compute budget.<a href="#fnref8" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn9"><p>The actual 80% confidence intervals for <span class="math inline">\(a\)</span> is <span class="math inline">\((0.462,0.534)\)</span>, so it’s not unreasonable to round it to 0.5 for simplicity.<a href="#fnref9" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn10"><p>Understandably so: computing even one of the IsoFLOP curves means training multiple models with a fair amount of compute each, which isn’t cheap!<a href="#fnref10" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn11"><p>On those lines, here’s a <a href="https://github.com/MilesCranmer/pysr_scaling_laws/">neat GitHub implementation</a> using PySR to directly regress scaling laws from data (<em>without</em> assuming a power law fit first)<a href="#fnref11" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn12"><p>1:1 data:model scaling, as expected<a href="#fnref12" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn13"><p>without needing to produce IsoFLOPs curves for each new dataset<a href="#fnref13" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn14"><p>That the model is decoder-only, natural language, with a mixture similar to MassiveText/the Pile.<a href="#fnref14" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn15"><p>These are questions such as “Given our compute reservations, is a 3B model that can be deployable in 6 weeks more valuable than a 20B model deployable in 3 months?”.<a href="#fnref15" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn16"><p>And hence, properly optimized at scale, will be 3x cheaper.<a href="#fnref16" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn17"><p>that is, the same validation loss<a href="#fnref17" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn18"><p>Assuming we still have the same amount of hardware, and are not too bottlenecked on the generation of the output tokens.<a href="#fnref18" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn19"><p>In other words, a schedule that has not fully decayed at the measurement point.<a href="#fnref19" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn20"><p>Note this leaves out the compute used for biases, nonlinearities and layer norms, which are a tiny fraction of total compute.<a href="#fnref20" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
 </ol>
 </section><section class="quarto-appendix-contents"><h2 class="anchored quarto-appendix-heading">Citation</h2><div><div class="quarto-appendix-secondary-label">BibTeX citation:</div><pre class="sourceCode code-with-copy quarto-appendix-bibtex"><code class="sourceCode bibtex">@online{shafkat2023,
   author = {Shafkat, Irhum},
-  title = {{[}DRAFT{]} {Thoughts} on {Chinchilla}},
-  date = {2023-10-06},
+  title = {Thoughts on {Chinchilla}},
+  date = {2023-10-11},
   url = {https://irhum.github.io/blog/chinchilla/},
   langid = {en}
 }
 </code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre><div class="quarto-appendix-secondary-label">For attribution, please cite this work as:</div><div id="ref-shafkat2023" class="csl-entry quarto-appendix-citeas" role="listitem">
-Shafkat, I. (2023, October 6). <em>[DRAFT] Thoughts on Chinchilla</em>.
-<a href="https://irhum.github.io/blog/chinchilla/">https://irhum.github.io/blog/chinchilla/</a>
+Shafkat, I. (2023, October 11). <em>Thoughts on Chinchilla</em>. <a href="https://irhum.github.io/blog/chinchilla/">https://irhum.github.io/blog/chinchilla/</a>
 </div></div></section></div></main> <!-- /main -->
 <script id="quarto-html-after-body" type="application/javascript">
 window.document.addEventListener("DOMContentLoaded", function (event) {

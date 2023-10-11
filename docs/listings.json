@@ -2,6 +2,7 @@
   {
     "listing": "/index.html",
     "items": [
+      "/blog/chinchilla/index.html",
       "/blog/lorawd/index.html",
       "/blog/lm/index.html",
       "/blog/pjit/index.html",
