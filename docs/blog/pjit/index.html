@@ -597,8 +597,8 @@ a = \begin{bmatrix}
 </div>
 <ul>
 <li>the second of four slices (the second <span class="math inline">\(1280\)</span> of <span class="math inline">\(5120\)</span>) along the embedding dimension</li>
-<li>of <em>all</em> the timesteps</li>
-<li>of the first of two slices (the first <span class="math inline">\(4\)</span> of <span class="math inline">\(8\)</span>) along the batch dimension.</li>
+<li><em>all</em> the timesteps</li>
+<li>the first of two slices (the first <span class="math inline">\(4\)</span> of <span class="math inline">\(8\)</span>) along the batch dimension.</li>
 </ul>
 <p>This sharding pattern should look familiar: this is Case 2 (since the outer axes are sharded) combined with Case 1B (since the inner axes are sharded on mismatched mesh axes), again! Visualizing again from the perspective of <code>X=0, Y=1</code>:</p>
 <div class="quarto-figure quarto-figure-center">
@@ -676,7 +676,7 @@ a = \begin{bmatrix}
 <p>A good way to think of <code>pjit</code> is a supercharged <code>jax.pmap</code>. If you recall, <code>pmap</code> runs the same program <a href="https://jax.readthedocs.io/en/latest/jax-101/06-parallelism.html">on multiple devices</a>, each with a different shard of <em>input data</em> over the <em>batch</em> axis. <code>pjit</code> is more flexible: it allows us to shard both the data and weights (and when training, even the optimizer states) in whatever configuration we please over a mesh. To do so, <code>pjit</code> requires three things from us:</p>
 <ul>
 <li>A mesh specification, mapping the “logical” devices on the 2D (or higher-D) mesh to the <em>physical</em> devices available.</li>
-<li>The sharding spec of all tensors being passed as <em>input</em> to, and returned as <em>output</em> to from the function.</li>
+<li>The sharding spec of all tensors being passed as <em>input</em> to, and returned as <em>output</em> from the function.</li>
 <li>Sharding constraints for select intermediate tensors inside the function. This isn’t <em>strictly</em> necessary (XLA GSPMD will try to find a viable layout), but can lead to improved memory usage.</li>
 </ul>
 <p>Note what isn’t here: JAX doesn’t need us to insert any of the collective ops we discussed. It uses a constraint based model, where we specify sharding constraints for the “big”, memory intensive tensors, and it automatically determines the sharding pattern for all other intermediate tensors in the function, as well as any collective ops that need to be inserted to meet these constraints.</p>
