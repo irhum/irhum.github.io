@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.450">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="dcterms.date" content="2021-05-07">
+<meta name="description" content="CUDA has a hierarchical programming model, requiring thought at the level of Grids, Blocks and Threads. We explore this directly, using our understanding to write a simple GPU accelerated addition kernel from scratch.">
+
+<title>irhum.github.io - CUDA programming with Julia</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../../">
+<script src="../../site_libs/quarto-html/quarto.js"></script>
+<script src="../../site_libs/quarto-html/popper.min.js"></script>
+<script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../../site_libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 20,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<script data-goatcounter="https://irhum.goatcounter.com/count" async="" src="//gc.zgo.at/count.js"></script>
+
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<meta name="twitter:title" content="irhum.github.io - CUDA programming with Julia">
+<meta name="twitter:description" content="CUDA has a hierarchical programming model, requiring thought at the level of Grids, Blocks and Threads. We explore this directly, using our understanding to write a simple GPU accelerated addition kernel from scratch.">
+<meta name="twitter:image" content="assets/intro.svg">
+<meta name="twitter:card" content="summary_large_image">
+</head>
+
+<body class="nav-fixed">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg navbar-dark ">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container">
+    <a class="navbar-brand" href="../../index.html">
+    <span class="navbar-title">irhum.github.io</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="../../about.html" rel="" target="">
+ <span class="menu-text">About</span></a>
+  </li>  
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/irhum" rel="" target=""><i class="bi bi-github" role="img">
+</i> 
+ <span class="menu-text"></span></a>
+  </li>  
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://twitter.com/irhumshafkat" rel="" target=""><i class="bi bi-twitter" role="img">
+</i> 
+ <span class="menu-text"></span></a>
+  </li>  
+</ul>
+            <div class="quarto-navbar-tools">
+</div>
+          </div> <!-- /navcollapse -->
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<header id="title-block-header" class="quarto-title-block default page-columns page-full">
+  <div class="quarto-title-banner page-columns page-full">
+    <div class="quarto-title column-body">
+      <h1 class="title">CUDA programming with Julia</h1>
+                  <div>
+        <div class="description">
+          CUDA has a hierarchical programming model, requiring thought at the level of Grids, Blocks and Threads. We explore this directly, using our understanding to write a simple GPU accelerated addition kernel from scratch.
+        </div>
+      </div>
+                          <div class="quarto-categories">
+                <div class="quarto-category">Julia</div>
+                <div class="quarto-category">CUDA</div>
+              </div>
+                  </div>
+  </div>
+    
+  
+  <div class="quarto-title-meta">
+
+      
+      <div>
+      <div class="quarto-title-meta-heading">Published</div>
+      <div class="quarto-title-meta-contents">
+        <p class="date">May 7, 2021</p>
+      </div>
+    </div>
+    
+      
+    </div>
+    
+  
+  </header><div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#but-first" id="toc-but-first" class="nav-link active" data-scroll-target="#but-first">But first</a>
+  <ul>
+  <li><a href="#you-probably-shouldnt-write-gpu-code" id="toc-you-probably-shouldnt-write-gpu-code" class="nav-link" data-scroll-target="#you-probably-shouldnt-write-gpu-code">You (probably) shouldn’t write GPU code</a></li>
+  <li><a href="#and-if-you-should-consider-using-julia" id="toc-and-if-you-should-consider-using-julia" class="nav-link" data-scroll-target="#and-if-you-should-consider-using-julia">And if you should, consider using Julia</a></li>
+  <li><a href="#the-two-language-problem" id="toc-the-two-language-problem" class="nav-link" data-scroll-target="#the-two-language-problem">The two language problem</a></li>
+  </ul></li>
+  <li><a href="#the-cuda-programming-model" id="toc-the-cuda-programming-model" class="nav-link" data-scroll-target="#the-cuda-programming-model">The CUDA Programming Model</a>
+  <ul>
+  <li><a href="#threads" id="toc-threads" class="nav-link" data-scroll-target="#threads">Threads</a></li>
+  <li><a href="#kernels" id="toc-kernels" class="nav-link" data-scroll-target="#kernels">Kernels</a></li>
+  <li><a href="#thread-hierarchy" id="toc-thread-hierarchy" class="nav-link" data-scroll-target="#thread-hierarchy">Thread Hierarchy</a>
+  <ul class="collapse">
+  <li><a href="#blocks" id="toc-blocks" class="nav-link" data-scroll-target="#blocks">Blocks</a></li>
+  <li><a href="#grid" id="toc-grid" class="nav-link" data-scroll-target="#grid">Grid</a></li>
+  </ul></li>
+  </ul></li>
+  <li><a href="#writing-a-kernel" id="toc-writing-a-kernel" class="nav-link" data-scroll-target="#writing-a-kernel">Writing a kernel</a>
+  <ul>
+  <li><a href="#the-1d-add-kernel" id="toc-the-1d-add-kernel" class="nav-link" data-scroll-target="#the-1d-add-kernel">The 1D add kernel</a></li>
+  <li><a href="#sending-data-to-the-gpu" id="toc-sending-data-to-the-gpu" class="nav-link" data-scroll-target="#sending-data-to-the-gpu">Sending data to the GPU</a></li>
+  <li><a href="#zooming-in" id="toc-zooming-in" class="nav-link" data-scroll-target="#zooming-in">Zooming in</a></li>
+  <li><a href="#launching-the-kernel" id="toc-launching-the-kernel" class="nav-link" data-scroll-target="#launching-the-kernel">Launching the kernel</a></li>
+  <li><a href="#quick-check" id="toc-quick-check" class="nav-link" data-scroll-target="#quick-check">Quick check</a></li>
+  </ul></li>
+  <li><a href="#finishing-the-kernel" id="toc-finishing-the-kernel" class="nav-link" data-scroll-target="#finishing-the-kernel">Finishing the kernel</a>
+  <ul>
+  <li><a href="#handling-all-input-sizes" id="toc-handling-all-input-sizes" class="nav-link" data-scroll-target="#handling-all-input-sizes">Handling all input sizes</a></li>
+  <li><a href="#preparing-for-the-end-user" id="toc-preparing-for-the-end-user" class="nav-link" data-scroll-target="#preparing-for-the-end-user">Preparing for the end-user</a></li>
+  <li><a href="#checking-conditions" id="toc-checking-conditions" class="nav-link" data-scroll-target="#checking-conditions">Checking conditions</a></li>
+  <li><a href="#create-output-arrays" id="toc-create-output-arrays" class="nav-link" data-scroll-target="#create-output-arrays">Create output arrays</a></li>
+  <li><a href="#launching-the-kernel-v.2" id="toc-launching-the-kernel-v.2" class="nav-link" data-scroll-target="#launching-the-kernel-v.2">Launching the kernel, v.2</a></li>
+  <li><a href="#performance" id="toc-performance" class="nav-link" data-scroll-target="#performance">Performance</a></li>
+  </ul></li>
+  <li><a href="#conclusion" id="toc-conclusion" class="nav-link" data-scroll-target="#conclusion">Conclusion</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content quarto-banner-title-block" id="quarto-document-content">
+
+
+
+
+<p>As Moore’s Law comes to an end, parallel computing hardware such as GPUs have been fundamental in driving progress in compute-intensive applications across nearly every field, such as bioinformatics, self-driving cars, deep learning, and so on. The core idea is straightforward: instead of having one large task you assign to a <em>very</em> fast CPU, you break the task into many small pieces. Each of these small sub-tasks is then assigned to one of the thousands of cores in a modern GPU, which all complete the sub-tasks in parallel.</p>
+<p>Even though each of the GPU cores individually is weak compared to a CPU core, their sheer number, working on the problem in parallel, can result in speedups of several orders of magnitude.</p>
+<p>In this blog post, we cover the basics of how to write programs for Nvidia GPUs in the Julia language. We’ll go step-by-step through a function that adds two 1D arrays (vectors) in parallel. By the end of this post, we’ll have added two vectors of a million elements each on the GPU:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> n <span class="op">=</span> <span class="fl">2</span><span class="op">^</span><span class="fl">20</span> <span class="co"># 1048576</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> THREADS_PER_BLOCK <span class="op">=</span> <span class="fl">256</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">add!</span>(c, a, b)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    x <span class="op">=</span> (<span class="fu">blockIdx</span>().x <span class="op">-</span> <span class="fl">1</span>) <span class="op">*</span> <span class="fu">blockDim</span>().x <span class="op">+</span> <span class="fu">threadIdx</span>().x </span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="pp">@inbounds</span> c[x] <span class="op">=</span> a[x] <span class="op">+</span> b[x]</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="pp">@cuda</span> threads<span class="op">=</span>THREADS_PER_BLOCK blocks<span class="op">=</span>n<span class="op">÷</span>THREADS_PER_BLOCK <span class="fu">add!</span>(C, A, B)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<section id="but-first" class="level2">
+<h2 class="anchored" data-anchor-id="but-first">But first</h2>
+<section id="you-probably-shouldnt-write-gpu-code" class="level3">
+<h3 class="anchored" data-anchor-id="you-probably-shouldnt-write-gpu-code">You (probably) shouldn’t write GPU code</h3>
+<p>Being able to program GPUs opens up an entire world of parallel programming to you, but it’s also a skill you should <em>only use as necessary</em>. For most common operations, there already exist optimized implementations you should use. For instance, you can add two arrays <code>A</code> and <code>B</code> on the GPU with <code>A .+ B</code> <a href="#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a> and Julia<a href="#fn2" class="footnote-ref" id="fnref2" role="doc-noteref"><sup>2</sup></a> will automatically call optimized code, saving you the need to write a kernel.</p>
+<p>This ties into the basic programming principle of avoiding the “<a href="https://en.wikipedia.org/wiki/Not_invented_here">not invented here</a>” syndrome: in this case, existing libraries already cover the majority of use cases by running GPU operations for you, and you should avoid writing your own GPU code in these cases.</p>
+<p>Nonetheless, it’s the edge cases (for which existing GPU implementations do not exist) where innovation happens, such as custom simulations or a new neural network operation. If that’s true <em>and</em> your problem lends itself well to being parallelized, consider the possibility of writing your own GPU code.</p>
+</section>
+<section id="and-if-you-should-consider-using-julia" class="level3">
+<h3 class="anchored" data-anchor-id="and-if-you-should-consider-using-julia">And if you should, consider using Julia</h3>
+<p>Most tutorials on CUDA you’ll find online will use C/C++, with good reason: CUDA was originally designed to work with C/C++, which are generally considered high-performance languages. The issue is that they’re also low-level languages, which leads to code that is hard to read and even harder to maintain. For instance, the code to transpose a 2D matrix (without optimizations) looks like this in C++:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode cpp code-with-copy"><code class="sourceCode cpp"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">// from https://github.com/NVIDIA-developer-blog/code-samples/blob/master/series/cuda-cpp/transpose/transpose.cu</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="at">const</span> <span class="dt">int</span> TILE_DIM <span class="op">=</span> <span class="dv">32</span><span class="op">;</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="at">const</span> <span class="dt">int</span> BLOCK_ROWS <span class="op">=</span> <span class="dv">8</span><span class="op">;</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>__global__ <span class="dt">void</span> transposeNaive<span class="op">(</span><span class="dt">float</span> <span class="op">*</span>odata<span class="op">,</span> <span class="at">const</span> <span class="dt">float</span> <span class="op">*</span>idata<span class="op">)</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="op">{</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">int</span> x <span class="op">=</span> blockIdx<span class="op">.</span>x <span class="op">*</span> TILE_DIM <span class="op">+</span> threadIdx<span class="op">.</span>x<span class="op">;</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">int</span> y <span class="op">=</span> blockIdx<span class="op">.</span>y <span class="op">*</span> TILE_DIM <span class="op">+</span> threadIdx<span class="op">.</span>y<span class="op">;</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>  <span class="dt">int</span> width <span class="op">=</span> gridDim<span class="op">.</span>x <span class="op">*</span> TILE_DIM<span class="op">;</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> <span class="op">(</span><span class="dt">int</span> j <span class="op">=</span> <span class="dv">0</span><span class="op">;</span> j <span class="op">&lt;</span> TILE_DIM<span class="op">;</span> j<span class="op">+=</span> BLOCK_ROWS<span class="op">)</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    odata<span class="op">[</span>x<span class="op">*</span>width <span class="op">+</span> <span class="op">(</span>y<span class="op">+</span>j<span class="op">)]</span> <span class="op">=</span> idata<span class="op">[(</span>y<span class="op">+</span>j<span class="op">)*</span>width <span class="op">+</span> x<span class="op">];</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>In comparison, the equivalent Julia code compiles to the same GPU instructions as the C++ version while being considerably more readable:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> TILE_DIM <span class="op">=</span> <span class="fl">32</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> BLOCK_ROWS <span class="op">=</span> <span class="fl">8</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">transpose!</span>(odata, idata)</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    x <span class="op">=</span> (<span class="fu">blockIdx</span>().x <span class="op">-</span> <span class="fl">1</span>) <span class="op">*</span> TILE_DIM <span class="op">+</span> <span class="fu">threadIdx</span>().x </span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    y <span class="op">=</span> (<span class="fu">blockIdx</span>().y <span class="op">-</span> <span class="fl">1</span>) <span class="op">*</span> TILE_DIM <span class="op">+</span> <span class="fu">threadIdx</span>().y </span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> j <span class="kw">in</span> <span class="fl">0</span><span class="op">:</span>BLOCK_ROWS<span class="op">:</span>TILE_DIM<span class="op">-</span><span class="fl">1</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>        odata[x, y <span class="op">+</span> j] <span class="op">=</span> idata[y <span class="op">+</span> j, x]</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>This is the core advantage: Julia is a high-level language, and CUDA.jl (the Julia library that interfaces with CUDA) allows us access to several conveniences, such as</p>
+<ul>
+<li><p>Not having to work with direct pointers to GPU memory. Instead, we work with the <code>CuArray</code> type, which behaves mostly the same as the regular <code>Array</code> type on the CPU</p></li>
+<li><p>In C++, we’d have to allocate GPU memory and then copy the data from the CPU to the GPU ourselves. In Julia, we use the <code>cu</code> function on a CPU <code>Array</code>, and this function handles the entire transfer process for us, directly returning us a <code>CuArray</code> .</p></li>
+<li><p>We can write <em>generic</em> kernels. In C++, we have to specify the type of GPU inputs (<code>float</code>s, in the case above). For instance, if we wanted an addition kernel that’d work with integers, it’d have to be written separately. In Julia, the kernel is compiled on-the-fly <em>by default</em> when new input data types are passed in, which means the same code above would work both on <code>float</code>s and <code>int</code>s.</p></li>
+</ul>
+</section>
+<section id="the-two-language-problem" class="level3">
+<h3 class="anchored" data-anchor-id="the-two-language-problem">The two language problem</h3>
+<p>Writing our kernels in Julia also allows one other key advantage: avoiding the <a href="https://www.nature.com/articles/d41586-019-02310-3">two language problem</a>. Today, most high-performance computing libraries are written in two languages: the compute-intensive sections are written in C++ and are then accessed by the end-user with “glue” code written in a higher-level language, like Python. This is the pattern used in major libraries like TensorFlow or PyTorch.</p>
+<p>The problem with this is double-fold: Firstly, your library becomes harder to maintain (since low-level languages are inherently more mentally taxing). Secondly, your end-users (who might only know Python) are unable to contribute much to improving the performance of your code (since that would be in C++).</p>
+<p>By having all your code in one language, not only does it become easier for you to reason through the code, but you’re far more likely to catch bugs in an open-source setting, as your end users can understand <em>and</em> contribute to the code as well.</p>
+</section>
+</section>
+<section id="the-cuda-programming-model" class="level2">
+<h2 class="anchored" data-anchor-id="the-cuda-programming-model">The CUDA Programming Model</h2>
+<p>Parallel programming requires one big, obvious paradigm shift from the standard programming models you are used to: your code will be run on thousands of cores at the same time. To make the most of this new paradigm, there are two concepts we need to understand: kernels and the thread hierarchy.</p>
+<section id="threads" class="level3">
+<h3 class="anchored" data-anchor-id="threads">Threads</h3>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/thread.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+<p>It is helpful to think of each thread as a <em>worker</em> that is <em>assigned</em> a small sub-task of the overall task. Note that the number of threads is not the number of cores on a GPU; the thread is a <em>logical</em> unit, whereas the core is a <em>physical</em> unit<em>.</em> For large problems, you can request threads far in excess of the number of cores; the GPU will begin running as many of those threads as it physically can and run more threads as the already running threads are completed. <em>Logically</em>, from the programmer’s point of view, all the threads you request are run at the same time; CUDA takes care of the actual scheduling and ordering of the threads for you.</p>
+<p>CUDA then allows you, the programmer, to not worry about the details of the parallelization. All you need to do is break the task down so that each thread has a clearly defined sub-task (e.g.&nbsp;when adding two 1D vectors <span class="math inline">\(a\)</span> and <span class="math inline">\(b\)</span> the i<sup>th</sup> thread performs <span class="math inline">\(a_i + b_i\)</span>), and then request as many threads as needed to solve the entire problem.</p>
+</section>
+<section id="kernels" class="level3">
+<h3 class="anchored" data-anchor-id="kernels">Kernels</h3>
+<p>With ordinary functions, when it is called once, it is also <em>executed</em> once. When a function is called once, through CUDA, the function is <em>executed</em> <span class="math inline">\(N\)</span> times by each of the <span class="math inline">\(N\)</span> threads on the GPU. These functions are called <strong>kernels</strong>, and each of the three code snippets we’ve seen so far is a kernel.</p>
+<p>A fragment of code very common when writing kernels is for a thread to compute what numbered thread it is globally. Here, this happens on line 5:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> n <span class="op">=</span> <span class="fl">2</span><span class="op">^</span><span class="fl">20</span> <span class="co"># 1048576</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> THREADS_PER_BLOCK <span class="op">=</span> <span class="fl">256</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">add!</span>(c, a, b)</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    x <span class="op">=</span> (<span class="fu">blockIdx</span>().x <span class="op">-</span> <span class="fl">1</span>) <span class="op">*</span> <span class="fu">blockDim</span>().x <span class="op">+</span> <span class="fu">threadIdx</span>().x </span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="pp">@inbounds</span> c[x] <span class="op">=</span> a[x] <span class="op">+</span> b[x]</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a><span class="pp">@cuda</span> threads<span class="op">=</span>THREADS_PER_BLOCK blocks<span class="op">=</span>n<span class="op">÷</span>THREADS_PER_BLOCK <span class="fu">add!</span>(C, A, B)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>The computed value of <code>x</code> changes on the thread executing it (thread 1 will obtain <code>x = 1</code>, whereas thread 1252 will obtain <code>x = 1252</code>). Then, each thread subsequently accesses and sums together <em>different</em> parts of the input on line 7. This means every single thread carries out the same <em>instruction</em>, just on different parts of the data<em>,</em> leading to the acronym SIMT: Single Instruction, Multiple Threads. This approach mean we only have to do two things to achieve parallelism:</p>
+<ul>
+<li><p>Write <em>one</em> set of instructions (i.e.&nbsp;one kernel function) for <em>all</em> the threads to carry out (i.e.&nbsp;execute)</p></li>
+<li><p>Ensure each thread accesses the correct part of the input for its sub-task.</p></li>
+</ul>
+</section>
+<section id="thread-hierarchy" class="level3">
+<h3 class="anchored" data-anchor-id="thread-hierarchy">Thread Hierarchy</h3>
+<section id="blocks" class="level4">
+<h4 class="anchored" data-anchor-id="blocks">Blocks</h4>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/block.svg" class="img-fluid figure-img" style="width:40.0%"></p>
+</figure>
+</div>
+<p>For tasks more interesting than just basic addition, threads may need to work with <em>each other</em>. Hence, with CUDA, we don’t simply carry out “launch 1,048,576 threads”. Rather, threads are grouped into <em>blocks,</em> and we ask CUDA to “launch 4,096 blocks, with 256 threads each”.</p>
+<p>When run, threads in the same block have access to a <em>shared</em> <em>memory</em> that they can use to transfer information between each other. This memory resides directly on the GPU chip, so accessing it has very low latency. A common strategy is to break a large problem (e.g.&nbsp;multiplying a <span class="math inline">\(512 \times 512\)</span> matrix) into many smaller problems (e.g.&nbsp;multiply many <span class="math inline">\(8 \times 8\)</span> matrices), and then for a block of threads to load into shared memory only the part of the original problem it then needs to work on together.</p>
+<p>Importantly, different blocks run independently of each other and <em>must</em> be able to run in any order. While this limits communication <em>between</em> blocks, this constraint produces two advantages:</p>
+<ul>
+<li><p>It allows the GPU to run blocks in parallel without causing any side effects since each block is programmed to run independently.</p></li>
+<li><p>It allows the programmer to focus on implementing code only across the threads of one block correctly (instead of every single thread on the GPU) because it can then be automatically parallelized across the entire problem.</p></li>
+</ul>
+<p>In order to have access to shared memory, threads in the same block are run on the same physical SM, that is, a <em>streaming multiprocessor</em> (a group of 64 CUDA cores). This results in a practical constraint: a block cannot have more than 1024 threads, and CUDA enforces this.</p>
+</section>
+<section id="grid" class="level4">
+<h4 class="anchored" data-anchor-id="grid">Grid</h4>
+<p><img src="assets/grid.svg" class="img-fluid"></p>
+<p>The grid refers to all the blocks scheduled to run for a problem. Like threads and blocks, it is a <em>logical</em> (and not a physical) construct. <em>Logically</em>, from the programmer’s point of view, all blocks on the grid execute in parallel; <em>physically</em>, the GPU will run as many blocks as it can on all available SMs in parallel and start running new blocks as the existing ones are completed.</p>
+</section>
+</section>
+</section>
+<section id="writing-a-kernel" class="level2">
+<h2 class="anchored" data-anchor-id="writing-a-kernel">Writing a kernel</h2>
+<section id="the-1d-add-kernel" class="level3">
+<h3 class="anchored" data-anchor-id="the-1d-add-kernel">The 1D add kernel</h3>
+<p>We now return to a more fleshed-out implementation of our code snippet from earlier. The code below does three things:</p>
+<ul>
+<li><p>creates three 1D arrays (i.e.&nbsp;vectors) of length 1,048,576 and sends them to the GPU</p></li>
+<li><p>defines an addition kernel</p></li>
+<li><p>launches the kernel with the correct number of blocks and threads to perform the actual calculation</p></li>
+</ul>
+<p>For simplicity, we set the length of the vector to be <span class="math inline">\(2^{20}=1048576\)</span>, a number divisible by the number of threads we assign per block (256).</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">CUDA </span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> n <span class="op">=</span> <span class="fl">2</span><span class="op">^</span><span class="fl">20</span> <span class="co"># 1048576, number of elements in 1D arrays</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> THREADS_PER_BLOCK <span class="op">=</span> <span class="fl">256</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="co"># create a vector [0.0, 0.0, 0.0...], and send to GPU</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>C <span class="op">=</span> <span class="fu">zeros</span>(<span class="dt">Float32</span>, n) <span class="op">|&gt;</span> cu </span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="co"># create two vectors, fill them with 1s and 2s, and send to GPU</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>A <span class="op">=</span> <span class="fu">fill</span>(<span class="fl">1.0f0</span>, n) <span class="op">|&gt;</span> cu </span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>B <span class="op">=</span> <span class="fu">fill</span>(<span class="fl">2.0f0</span>, n) <span class="op">|&gt;</span> cu</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">add!</span>(c, a, b)</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>    <span class="co"># compute the thread_id</span></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>    x <span class="op">=</span> (<span class="fu">blockIdx</span>().x <span class="op">-</span> <span class="fl">1</span>) <span class="op">*</span> <span class="fu">blockDim</span>().x <span class="op">+</span> <span class="fu">threadIdx</span>().x </span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>    <span class="co"># i'th thread should get the i'th elements of a and b </span></span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>    <span class="co"># sum them, and then store them in i'th element of c</span></span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>    <span class="pp">@inbounds</span> c[x] <span class="op">=</span> a[x] <span class="op">+</span> b[x]</span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span></span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a>threads <span class="op">=</span> THREADS_PER_BLOCK <span class="co"># 256</span></span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a>blocks <span class="op">=</span> n <span class="op">÷</span> threads <span class="co"># 4096</span></span>
+<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a><span class="co"># launch the kernel with 4096 blocks, of 256 threads each</span></span>
+<span id="cb5-27"><a href="#cb5-27" aria-hidden="true" tabindex="-1"></a><span class="pp">@cuda</span> threads<span class="op">=</span>threads blocks<span class="op">=</span>blocks <span class="fu">add!</span>(C, A, B)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="sending-data-to-the-gpu" class="level3">
+<h3 class="anchored" data-anchor-id="sending-data-to-the-gpu">Sending data to the GPU</h3>
+<p>We create a vector <code>C</code>, to hold our output values, as well as vectors <code>A</code> and <code>B</code> that are filled with 1s and 2s, respectively. We then use the <code>cu</code> function described earlier<a href="#fn3" class="footnote-ref" id="fnref3" role="doc-noteref"><sup>3</sup></a> which takes in an <code>Array</code> on the CPU, and sends it to the GPU, returning a <code>CuArray</code> .</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># create a vector [0.0, 0.0, 0.0...], and send to GPU</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>C <span class="op">=</span> <span class="fu">zeros</span>(<span class="dt">Float32</span>, n) <span class="op">|&gt;</span> cu </span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co"># create two vectors, fill them with 1s and 2s, and send to GPU</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>A <span class="op">=</span> <span class="fu">fill</span>(<span class="fl">1.0f0</span>, n) <span class="op">|&gt;</span> cu </span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>B <span class="op">=</span> <span class="fu">fill</span>(<span class="fl">2.0f0</span>, n) <span class="op">|&gt;</span> cu</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>One thing of note is that all three vectors have 32-bit (“single-precision”) floats<a href="#fn4" class="footnote-ref" id="fnref4" role="doc-noteref"><sup>4</sup></a> as opposed to 64-bit (“double-precision”) values. GPUs perform better when working with single-precision data, and unless you have good reason to be very numerically precise (e.g.&nbsp;simulating a chaotic system), single-precision data should more than suffice.</p>
+</section>
+<section id="zooming-in" class="level3">
+<h3 class="anchored" data-anchor-id="zooming-in">Zooming in</h3>
+<p>Let’s zoom in on the kernel itself, free of its boilerplate:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">add!</span>(c, a, b)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    <span class="co"># compute the thread_id</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    x <span class="op">=</span> (<span class="fu">blockIdx</span>().x <span class="op">-</span> <span class="fl">1</span>) <span class="op">*</span> <span class="fu">blockDim</span>().x <span class="op">+</span> <span class="fu">threadIdx</span>().x </span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    <span class="co"># i'th thread should get the i'th elements of a and b </span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    <span class="co"># sum them, and then store them in i'th element of c</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    <span class="pp">@inbounds</span> c[x] <span class="op">=</span> a[x] <span class="op">+</span> b[x]</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>There are four things of note going on here:</p>
+<ul>
+<li>Inside a kernel, a thread has access to special functions. Here, we use three:
+<ul>
+<li><p><code>blockIdx()</code> : returns what block number the thread is part of</p></li>
+<li><p><code>blockDim()</code> : returns the number of threads in that block</p></li>
+<li><p><code>threadIdx()</code> : returns which thread in the block the current thread is</p></li>
+</ul></li>
+</ul>
+<p>For instance, when the 3<sup>rd</sup> thread in the 3<sup>rd</sup> block calls these functions, it will be evaluated in the way shown below<a href="#fn5" class="footnote-ref" id="fnref5" role="doc-noteref"><sup>5</sup></a>, resulting in a global index of 515.</p>
+<p><img src="assets/threadid.svg" class="img-fluid"></p>
+<ul>
+<li><p>Once we have the thread’s global index, we index out the relevant values from the <code>a</code> and <code>b</code> vectors, add them and then store them into the corresponding location in <code>c</code> on line 7.</p></li>
+<li><p>Julia typically performs bounds checking to make sure we’re not using an index value outside the boundaries of an array. While useful with typical CPU code, this comes with a performance hit. To make the most of the GPU’s capabilities, it is recommended to use the <code>@inbounds</code> macro as we do on line 7, which tells Julia to disable bounds checking for that line.</p></li>
+<li><p>One important aspect of kernels is that they cannot return values directly. All changes they make have to be in the form of changes to their inputs<a href="#fn6" class="footnote-ref" id="fnref6" role="doc-noteref"><sup>6</sup></a>, which is why we use vector <code>C</code> to store all the output values. On line 8, we only have the keyword <code>return</code>, which instructs the function to have no return value.</p></li>
+</ul>
+</section>
+<section id="launching-the-kernel" class="level3">
+<h3 class="anchored" data-anchor-id="launching-the-kernel">Launching the kernel</h3>
+<p>Once we have our data and our kernel, we need to actually <em>launch</em> our kernel, which we can do using the <code>@cuda</code> macro:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>threads <span class="op">=</span> THREADS_PER_BLOCK <span class="co"># 256</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>blocks <span class="op">=</span> n <span class="op">÷</span> threads <span class="co"># 4096</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="co"># launch the kernel with 4096 blocks, of 256 threads each</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="pp">@cuda</span> threads<span class="op">=</span>threads blocks<span class="op">=</span>blocks <span class="fu">add!</span>(C, A, B)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>Here, we choose to use 256 threads per block. Since each thread is processing one element, and we have 1,048,576 elements total, we will need 1,048,576 threads. We calculate the number of blocks (of 256 threads) we’ll need to have that many threads, and it comes out to 4,096 blocks.</p>
+<p>We then launch the kernel using the <code>@cuda</code> macro, passing in the number of threads and blocks we’d like to use. This modifies the array <code>C</code> in-place, replacing its 0-initialized values with the ones from our computation. Hence, we get <code>C = [3.0, 3.0,…, 3.0]</code> .</p>
+</section>
+<section id="quick-check" class="level3">
+<h3 class="anchored" data-anchor-id="quick-check">Quick check</h3>
+<p>Take a minute, and try to figure out what would happen to the vector <code>C</code> if we initialized <code>C</code> to a vector of 0’s, and ran the following: <code>@cuda threads=1 blocks=1 add!(C, A, B)</code> i.e.&nbsp;if we launched the kernel with only one block and one thread in that block.</p>
+<p style="text-align: center">
+<span class="math inline">\(\cdot \cdot \cdot\)</span>
+</p>
+<p>In this case, there’s one thread overall. That thread computes its index to be 1 and updates the first element of <code>C</code> with <code>A[1]+B[1]</code>. Since there are no more threads, all other elements of <code>C</code> remain untouched and have their initial value of 0. Then, <code>C = [3.0, 0.0,…, 0.0]</code>.</p>
+</section>
+</section>
+<section id="finishing-the-kernel" class="level2">
+<h2 class="anchored" data-anchor-id="finishing-the-kernel">Finishing the kernel</h2>
+<p>Now that we understand how to write kernels, let’s improve the addition kernel into a function an end-user can use.</p>
+<section id="handling-all-input-sizes" class="level3">
+<h3 class="anchored" data-anchor-id="handling-all-input-sizes">Handling all input sizes</h3>
+<p>The current implementation of the kernel can only process vectors whose number of elements is a multiple of the number of threads per block. To lift this constraint, we make the two following changes:</p>
+<ul>
+<li>Previously, we performed direct integer division to get the number of blocks (<code>blocks = n ÷ threads</code>). This is only sensible when the length of the vector is an integer multiple of the number of threads. Instead, now we perform regular division and then round <em>up:</em></li>
+</ul>
+<div class="sourceCode" id="cb9"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>threads <span class="op">=</span> THREADS_PER_BLOCK <span class="co"># 256</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="co"># calculate number of blocks needed to get total threads</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="co"># equal to number of elements, then round *up* to nearest integer</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="co"># this previously was: blocks = n ÷ threads</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>blocks <span class="op">=</span> <span class="fu">ceil</span>(<span class="dt">Int64</span>, <span class="fu">length</span>(C)<span class="op">/</span>threads) </span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="co"># launch the kernel with specified number of blocks, of 256 threads each</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="pp">@cuda</span> threads<span class="op">=</span>threads blocks<span class="op">=</span>blocks <span class="fu">add!</span>(C, A, B)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<ul>
+That is, we launch the minimum number of blocks such that the number of total threads is <em>equal to or more</em> than the number of elements in our vector.
+</ul>
+<ul>
+<li>Now, we might have more threads than entries in the vector. For instance, if the vector has 1,000,000 elements, 3907 blocks will be launched, with 1,000,192 threads total. When thread 1,000,101 will try to obtain the 1,000,101<sup>st</sup> element of <code>C</code> it’ll face an indexing error. To avoid this, we update our kernel as such:</li>
+</ul>
+<div class="sourceCode" id="cb10"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">add!</span>(c, a, b)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    <span class="co"># compute the thread_id</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    x <span class="op">=</span> (<span class="fu">blockIdx</span>().x <span class="op">-</span> <span class="fl">1</span>) <span class="op">*</span> <span class="fu">blockDim</span>().x <span class="op">+</span> <span class="fu">threadIdx</span>().x </span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    <span class="co"># only perform action if thread id is not greater than the number of elements</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> x <span class="op">&lt;=</span> <span class="fu">size</span>(c)[<span class="fl">1</span>]</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>        <span class="co"># i'th thread should get the i'th elements of a and b </span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>        <span class="co"># sum them, and then store them in i'th element of c</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>        <span class="pp">@inbounds</span> c[x] <span class="op">=</span> a[x] <span class="op">+</span> b[x]</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<ul>
+For threads with an index greater than the number of elements, the <code>if</code> condition is never met, and they simply go to the next line (the <code>return</code> on line 11), finish running and are marked by the GPU as completed.
+</ul>
+</section>
+<section id="preparing-for-the-end-user" class="level3">
+<h3 class="anchored" data-anchor-id="preparing-for-the-end-user">Preparing for the end-user</h3>
+<p>To run our custom kernel on the GPU we need to create an appropriately sized output vector, as well as launch the kernel with the correct number of blocks and threads. This is fine for prototype code, but if we want this to be used by others (who presumably only care about adding two vectors), we should simplify our code by writing a “companion function” for the kernel, that launches the kernel for the user:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">add</span>(a<span class="op">::</span><span class="dt">CuVector</span>, b<span class="op">::</span><span class="dt">CuVector</span>)</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    <span class="co"># check a and b have the same length</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>​    <span class="cf">if</span> <span class="fu">length</span>(a) <span class="op">!=</span> <span class="fu">length</span>(b)</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>​        <span class="fu">throw</span>(<span class="fu">DimensionMismatch</span>(<span class="st">"A and B must have same number of elements; A has </span><span class="sc">$</span>(<span class="fu">length</span>(a))<span class="st"> elements, B has </span><span class="sc">$</span>(<span class="fu">length</span>(b))<span class="st"> elements"</span>))</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>​    <span class="cf">end</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    <span class="co"># number of elements for vector c</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    n <span class="op">=</span> <span class="fu">length</span>(a)</span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>    <span class="co"># get the types of elements of vector a and b and</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>    <span class="co"># use that to compute the element type for vector c</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>    typea <span class="op">=</span> <span class="fu">eltype</span>(a)</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>    typeb <span class="op">=</span> <span class="fu">eltype</span>(b)</span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>    typec <span class="op">=</span> <span class="fu">promote_type</span>(type_a, type_b)</span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>    <span class="co"># create a vector of zeros (directly on the GPU)</span></span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>    <span class="co"># of length n and type typec </span></span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>    c <span class="op">=</span> CUDA.<span class="fu">zeros</span>(typec, n)</span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>    <span class="co"># compute the number of threads and blocks</span></span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>    threads <span class="op">=</span> THREADS_PER_BLOCK <span class="co"># 256</span></span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>    blocks <span class="op">=</span> <span class="fu">ceil</span>(<span class="dt">Int64</span>, n<span class="op">/</span>threads) </span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>    <span class="co"># launch the kernel</span></span>
+<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a>    <span class="pp">@cuda</span> threads<span class="op">=</span>threads blocks<span class="op">=</span>blocks <span class="fu">add!</span>(c, a, b)</span>
+<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> c</span>
+<span id="cb11-28"><a href="#cb11-28" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>Such functions will usually do three things: First, check any necessary conditions are met. Second, create new arrays to hold the output. Finally, launch the kernel.</p>
+</section>
+<section id="checking-conditions" class="level3">
+<h3 class="anchored" data-anchor-id="checking-conditions">Checking conditions</h3>
+<p>Here, we check whether both inputs are indeed 1-D arrays on the GPU.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">add</span>(a<span class="op">::</span><span class="dt">CuVector</span>, b<span class="op">::</span><span class="dt">CuVector</span>)</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    <span class="co"># check a and b have the same length</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="fu">length</span>(a) <span class="op">!=</span> <span class="fu">length</span>(b)</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>        <span class="fu">throw</span>(<span class="fu">DimensionMismatch</span>(<span class="st">"A and B must have same number of elements; A has </span><span class="sc">$</span>(<span class="fu">length</span>(a))<span class="st"> elements, B has </span><span class="sc">$</span>(<span class="fu">length</span>(b))<span class="st"> elements"</span>))</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>This is done by adding<a href="#fn7" class="footnote-ref" id="fnref7" role="doc-noteref"><sup>7</sup></a> <code>::CuVector</code><a href="#fn8" class="footnote-ref" id="fnref8" role="doc-noteref"><sup>8</sup></a> to the function argument. We then also check that <code>a</code> and <code>b</code> have the same number of elements, throwing a <code>DimensionMismatch</code> error otherwise.</p>
+</section>
+<section id="create-output-arrays" class="level3">
+<h3 class="anchored" data-anchor-id="create-output-arrays">Create output arrays</h3>
+<p>In this case, we need to create an output array <code>c</code> to hold the results of our computation. The length of the vector should be <code>n</code>, but what should be the type of its elements? For instance, if we’re adding two vectors of <code>Float32</code> values, then <code>c</code> should be <code>Float32</code>, but what if <code>a</code> is <code>CuVector{Float32}</code><a href="#fn9" class="footnote-ref" id="fnref9" role="doc-noteref"><sup>9</sup></a> while <code>b</code> is <code>CuVector{Int32}</code> ?</p>
+<p>Our goal is to write a <em>generic</em> function, that is, it should work for all possible combinations of the element types of <code>a</code> and <code>b</code>. CUDA.jl will automatically compile new versions of the kernel, but we also need to make sure that the output vector <code>c</code> is of the correct type.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>typea <span class="op">=</span> <span class="fu">eltype</span>(a)</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>typeb <span class="op">=</span> <span class="fu">eltype</span>(b)</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>typec <span class="op">=</span> <span class="fu">promote_type</span>(type_a, type_b)</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> CUDA.<span class="fu">zeros</span>(typec, n)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>We do this by using the standard Julia functions for this purpose: use <code>eltype</code> to get the element types of <code>a</code> and <code>b</code>, then use <code>promote_type</code> to get the correct type needed for <code>c</code> . For instance:</p>
+<ul>
+<li><p>if <code>a</code> and <code>b</code> are of types <code>CuVector{Float32}</code> and <code>CuVector{Int32}</code> respectively</p></li>
+<li><p>then, <code>typea</code> and <code>typeb</code> are <code>Float32</code> and <code>Int32</code></p></li>
+<li><p>then, <code>typec</code> is computed to be <code>Float32</code> under the rules of <a href="https://docs.julialang.org/en/v1/manual/conversion-and-promotion/">type promotion</a> in Julia</p></li>
+</ul>
+<p>We can then create a vector of zeros of <code>typec</code> elements and of length <code>n</code> directly on the GPU using <code>CUDA.zeros(typec, n)</code> .</p>
+</section>
+<section id="launching-the-kernel-v.2" class="level3">
+<h3 class="anchored" data-anchor-id="launching-the-kernel-v.2">Launching the kernel, v.2</h3>
+<p>This proceeds as previously: we calculate the number of threads and blocks as previously and launch the kernel. The only difference is that this time, the kernel launch happens inside a function that the end-user does not have to interact with. We then return the vector holding the outputs, <code>c</code>, as the output of the companion function.</p>
+<p>With our companion function written, all our end-user has to do now to add two <code>CuVectors</code> <code>A</code> and <code>B</code> is call <code>C = add(A, B)</code> . This will run the necessary checks, allocate an output array and launch the required kernel. The user then gets returned a new vector <code>C</code> with the results of the addition.</p>
+</section>
+<section id="performance" class="level3">
+<h3 class="anchored" data-anchor-id="performance">Performance</h3>
+<p>I ran a quick, informal benchmark of the kernel on the task of summing two vectors with 10 million elements each, against the default way to do this on a CPU and GPU (which is to use <code>A .+ B</code> , as previously mentioned). I obtained the following<a href="#fn10" class="footnote-ref" id="fnref10" role="doc-noteref"><sup>10</sup></a>:</p>
+<table class="table">
+<thead>
+<tr class="header">
+<th><strong>Function Call</strong></th>
+<th><strong>Time (ms)</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>A .+ B</code> (CPU, Xeon on GCP)</td>
+<td>17.11</td>
+</tr>
+<tr class="even">
+<td><code>add(A, B)</code> (GPU, Tesla T4)</td>
+<td>0.651</td>
+</tr>
+<tr class="odd">
+<td><code>A .+ B</code> (GPU, Tesla T4)</td>
+<td>0.476</td>
+</tr>
+</tbody>
+</table>
+<p>Our barebones implementation on the GPU is already over 26x faster than the CPU implementation (it still lags behind Julia’s optimized kernels, which are nearly 36x faster). This ties into the message at the start of this blog post: for the right problems, GPUs are orders of magnitude faster than CPUs. At the same time, to make the most of this advantage, focus your efforts on writing kernels for problems where optimized ones <em>don’t</em> already exist.</p>
+<p>(We’ll begin exploring concepts related to optimizing GPU code, such as shared memory, warps, and thread divergence over the next few blog posts)</p>
+</section>
+</section>
+<section id="conclusion" class="level2">
+<h2 class="anchored" data-anchor-id="conclusion">Conclusion</h2>
+<p>Although there aren’t as many resources for CUDA programming in Julia as compared to for C++, skimming through them can still be very beneficial to learn tips and tricks that can be translated into Julia code. I would recommend the <a href="https://docs.nvidia.com/cuda/cuda-c-programming-guide/#programming-model">CUDA Programming Guide</a> for more details on how to program Nvidia GPUs and Mark Harris’s <a href="https://developer.nvidia.com/blog/author/mharris/">blog posts</a> (one of his posts, <a href="https://developer.nvidia.com/blog/even-easier-introduction-cuda/">An Even Easier Introduction to CUDA</a> was the source of inspiration for this blog post).</p>
+<p>Parallel programming is a powerful skill to have in an increasingly data-heavy world, and Julia’s support for it is poised to make it more accessible than ever before. I do hope that, having read this blog post, the snippet of code at the start feels more familiar now. We’ve just scratched the surface, and I intend to write more about CUDA programming in Julia over the coming weeks.</p>
+<p><strong>Update, Oct 2022</strong>: A lot has happened since I originally wrote this! Even though I still find Julia pretty cool, these days I find myself spending most of my time in Python. I might write a follow-up at some point, especially as the infrastructure surrounding Julia continues to mature.</p>
+
+
+</section>
+
+
+<div id="quarto-appendix" class="default"><section id="footnotes" class="footnotes footnotes-end-of-document" role="doc-endnotes"><h2 class="anchored quarto-appendix-heading">Footnotes</h2>
+
+<ol>
+<li id="fn1"><p>We use <a href="https://docs.julialang.org/en/v1/manual/functions/#man-vectorized">dot syntax</a> here, which automatically converts the <code>+</code> operator to a vectorized version that is applied over the entire array<a href="#fnref1" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn2"><p>In this case specifically, using the dot syntax results in Julia fusing the operation and <a href="https://developer.nvidia.com/blog/gpu-computing-julia-programming-language/">creating a custom kernel</a> under the hood.<a href="#fnref2" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn3"><p>You might notice instead of directly calling <code>cu</code> on an input <code>X</code> (i.e.&nbsp;<code>cu(X)</code>), we use this syntax: <code>|&gt; cu</code>. <code>|&gt;</code> is the pipe operator, and <code>x |&gt; f</code> is equivalent to <code>f(x)</code>, that is, the input is “piped” into the function. While subjective, I would consider this an idiomatic way to use <code>cu</code>, as the input is “piped” to the GPU.<a href="#fnref3" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn4"><p>The <code>fill(1.0f0, n)</code> syntax means “create a vector of length <code>n</code>, filled with <code>1.0f0</code>”. The <code>1.0</code> is the value, and the <code>f0</code> at the end tells Julia this is a <code>Float32</code>.<a href="#fnref4" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn5"><p>Note that the indices for both the <code>threads</code> and <code>blocks</code> start at <code>1</code>. This is to remain consistent with Julia’s 1-indexing.</p>
+<p>(For comparison, in C++ the functions return indices starting at 0. You can see this behavior in the blog post that originally inspired this diagram)<a href="#fnref5" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn6"><p>This is also why kernels have their function names ending with <code>!</code>. The Julia <a href="https://docs.julialang.org/en/v1/base/punctuation/">convention</a> for functions that modify one or more of their arguments is to append a <code>!</code> to the name.<a href="#fnref6" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn7"><p>In Julia, <code>x::type</code> is a <a href="https://docs.julialang.org/en/v1/manual/types/#Type-Declarations-1">type annotation</a>, that “<code>x</code> is of type <code>type</code>”.<a href="#fnref7" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn8"><p><code>CuVector</code> is a <a href="https://docs.julialang.org/en/v1/manual/types/#Type-Aliases">type alias</a> for <code>CuArray</code>, defined by <a href="https://github.com/JuliaGPU/CUDA.jl/blob/fd98e884b1ec557439c42ed70d5be07d1ba212a8/src/array.jl#L93"><code>CuVector{T} = CuArray{T,1}</code></a>. That is, a CuVector is a CuArray where the elements are of any type, but the CuArray is only one dimensional.<a href="#fnref8" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn9"><p>that is, a <code>CuVector</code> whose elements are <code>Float32</code> values<a href="#fnref9" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn10"><p><code>A</code> and <code>B</code> are randomly initialized <code>Float32</code> arrays. For the CPU version, <code>A .+ B</code> is called directly, while for the GPU version, <code>A</code> and <code>B</code> are moved to the GPU first before the addition.</p>
+<p>The benchmarks (done using BenchmarkTools.jl’s <code>@benchmark</code> macro) cover the time needed to allocate the output array and perform the computation. (They do not cover the time needed to move the arrays to the GPU)<a href="#fnref10" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+</ol>
+</section></div></main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>

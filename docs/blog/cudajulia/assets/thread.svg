@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="7.9886289mm"
+   height="20.026403mm"
+   viewBox="0 0 7.9886289 20.026403"
+   version="1.1"
+   id="svg8"
+   inkscape:version="1.0.2 (e86c8708, 2021-01-15)"
+   sodipodi:docname="thread.svg">
+  <defs
+     id="defs2">
+    <marker
+       style="overflow:visible"
+       id="Arrow1Mend"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow1Mend"
+       inkscape:isstock="true">
+      <path
+         transform="matrix(-0.4,0,0,-0.4,-4,0)"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         id="path3132" />
+    </marker>
+  </defs>
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="3.371007"
+     inkscape:cx="-8.145316"
+     inkscape:cy="31.115578"
+     inkscape:document-units="mm"
+     inkscape:current-layer="layer1"
+     inkscape:document-rotation="0"
+     showgrid="false"
+     inkscape:window-width="1252"
+     inkscape:window-height="783"
+     inkscape:window-x="0"
+     inkscape:window-y="25"
+     inkscape:window-maximized="0" />
+  <metadata
+     id="metadata5">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-154.75569,-145.71299)">
+    <g
+       id="g3760"
+       transform="translate(137.68128,122.89108)">
+      <path
+         style="fill:none;stroke:#000000;stroke-width:0.265;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         d="m 21.013191,22.953565 c -1.917692,0.217382 -3.805798,0.449278 -3.805798,1.607414 0,2.353149 7.64773,-0.220607 7.64773,2.647292 0,2.867898 -7.500658,0.07353 -7.500658,2.794362 0,2.720827 7.427122,0.441217 7.574194,2.720827 0.147072,2.279613 -7.794802,0.661823 -7.721266,3.309114 0.07354,2.647292 7.64773,-0.735359 7.64773,1.61779 0,2.353149 -3.088506,1.103037 -3.750329,2.132539 -0.661823,1.029504 -0.294144,1.691325 -0.294144,1.691325"
+         id="path3121"
+         sodipodi:nodetypes="csssssssc"
+         inkscape:export-xdpi="1599.2986"
+         inkscape:export-ydpi="1599.2986" />
+      <path
+         style="fill:none;stroke:#000000;stroke-width:0.212635px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#Arrow1Mend)"
+         d="m 20.735818,41.026353 v 1.402922"
+         id="path3437"
+         inkscape:export-xdpi="1599.2986"
+         inkscape:export-ydpi="1599.2986" />
+    </g>
+  </g>
+</svg>
